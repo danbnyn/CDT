@@ -157,7 +157,8 @@ def find_intersecting_triangle(start_idx, target_idx, vertices, triangles, edge_
     while orient(target_idx, r_idx, l_idx, vertices) <= 0:
 
         if in_triangle(start_idx, r_idx, l_idx, target_idx, vertices):
-            visualize_intersecting_triangle(vertices, triangles, main_traversal_triangles, start_idx, target_idx)
+            if visualize:
+                visualize_intersecting_triangle(vertices, triangles, main_traversal_triangles, start_idx, target_idx)
             return main_traversal_triangles
 
         step_number += 1

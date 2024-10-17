@@ -387,9 +387,7 @@ def insert_constraint_edge(u, v, vertices, triangles, edge_to_triangle, vertex_t
         delete_triangle(t_idx, triangles, edge_to_triangle, vertex_to_triangle)
 
     if visualize:
-        plot_triangulation(vertices, triangles)
-
-    plot_triangulation_and_edge(vertices, triangles, [u, v])
+        plot_triangulation_and_edge(vertices, triangles, [u, v])
 
     # Step 4: Retriangulate each cavity using cavityCDT
     for cavity_vertices in cavities:
