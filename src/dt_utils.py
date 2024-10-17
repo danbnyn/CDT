@@ -3,7 +3,11 @@ import random
 import math
 from collections import defaultdict
 
-from src.predicates import in_circle, orient, in_triangle
+from src.predicates import (
+    in_circle, 
+    orient, 
+    in_triangle
+    )
 
 from src.operations import (
     delete_triangle,

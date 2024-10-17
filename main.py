@@ -43,9 +43,9 @@ def main():
 
     seed(18)
 
-    resolution = 20
+    resolution = 200
     max_iteration = 100
-    min_distance = 0.2
+    min_distance = 0.02
 
     verbose = 2
 

@@ -20,7 +20,9 @@ from src.operations import (
     get_triangle_neighbors_constrained
     )
 
-from src.dt_utils import walk_to_point
+from src.dt_utils import (
+    walk_to_point
+    )
 
 def ignore_during_traversal(r_idx, l_idx, start_idx, target_idx, vertices):
     """
