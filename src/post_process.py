@@ -31,24 +31,24 @@ from time import time
 import numpy as np
 from time import time
 
-def clean_mesh(vertices, triangles, edge_to_triangle, super_vertices, vertex_to_triangles, polygon_outer_edges, verbose=1):
+def clean_mesh(delaunay_node_coords, triangles, delaunay_dic_edge_triangle, super_delaunay_node_coords, delaunay_node_elems, polygon_outer_edges, verbose=1):
     """
-    Cleans the mesh by removing the super triangle, reindexing the vertices, and updating the vertex_to_triangles list.
+    Cleans the mesh by removing the super triangle, reindexing the delaunay_node_coords, and updating the delaunay_node_elems list.
 
     Parameters:
-    - vertices: List of vertices including the original point cloud and super-triangle vertices.
+    - delaunay_node_coords: List of delaunay_node_coords including the original point cloud and super-triangle delaunay_node_coords.
     - triangles: List of triangles representing the triangulated mesh.
-    - edge_to_triangle: Dictionary mapping edges to triangle indices.
-    - super_vertices: List of indices of the super-triangle vertices.
-    - vertex_to_triangles: List of lists, where each sublist contains triangle indices.
+    - delaunay_dic_edge_triangle: Dictionary mapping edges to triangle indices.
+    - super_delaunay_node_coords: List of indices of the super-triangle delaunay_node_coords.
+    - delaunay_node_elems: List of lists, where each sublist contains triangle indices.
     - polygon_outer_edges: List of edges defining the outer boundary of the polygon.
     - verbose: Integer indicating the verbosity level (0: silent, 1: basic, 2: detailed).
 
     Returns:
-    - vertices: Updated list of vertices after cleaning.
+    - delaunay_node_coords: Updated list of delaunay_node_coords after cleaning.
     - new_triangles: Updated list of triangles after cleaning.
-    - edge_to_triangle: Updated edge-to-triangle mapping.
-    - vertex_to_triangles: Updated vertex-to-triangles list.
+    - delaunay_dic_edge_triangle: Updated edge-to-triangle mapping.
+    - delaunay_node_elems: Updated vertex-to-triangles list.
     """
 
     start_time = time()
@@ -57,70 +57,70 @@ def clean_mesh(vertices, triangles, edge_to_triangle, super_vertices, vertex_to_
     # Step 1: Remove super-triangle triangles
     step_start = time()
     super_tri_idx = []
-    for vertex in super_vertices:
-        super_tri_idx.extend(vertex_to_triangles[vertex])
+    for vertex in super_delaunay_node_coords:
+        super_tri_idx.extend(delaunay_node_elems[vertex])
 
     unique_super_tri_idx = list(set(super_tri_idx))  # Remove duplicates
     if verbose >=1:
         log(f"Identified {len(unique_super_tri_idx)} super-triangle triangles to remove.", verbose, level=1)
     for tri_idx in unique_super_tri_idx:
-        delete_triangle(tri_idx, triangles, edge_to_triangle, vertex_to_triangles)
+        delete_triangle(tri_idx, triangles, delaunay_dic_edge_triangle, delaunay_node_elems)
     
     step_time = time() - step_start
     log(f"Step 1: Removed super-triangle triangles in {step_time:.4f} seconds.", verbose, level=1)
     if verbose >=2:
         log(f"Total triangles after removal: {len(triangles)}", verbose, level=2)
 
-    plot_triangulation(vertices, triangles, title="Triangulation after removing super-triangle triangles")
+    plot_triangulation(delaunay_node_coords, triangles, title="Triangulation after removing super-triangle triangles")
 
     # Step 2: Remove the triangles exterior to the boundary
     step_start = time()
-    exterior_removed = filter_exterior_triangles(vertices, triangles, vertex_to_triangles, edge_to_triangle, polygon_outer_edges)
+    exterior_removed = filter_exterior_triangles(delaunay_node_coords, triangles, delaunay_node_elems, delaunay_dic_edge_triangle, polygon_outer_edges)
     step_time = time() - step_start
     log(f"Step 2: Removed exterior triangles in {step_time:.4f} seconds.", verbose, level=1)
     if verbose >=2:
         log(f"Total triangles after removing exterior: {len(triangles)}", verbose, level=2)
 
-    # Step 3: Remove the super-triangle vertices
+    # Step 3: Remove the super-triangle delaunay_node_coords
     step_start = time()
-    vertices = np.delete(vertices, super_vertices, axis=0)
+    delaunay_node_coords = np.delete(delaunay_node_coords, super_delaunay_node_coords, axis=0)
     step_time = time() - step_start
-    log(f"Step 3: Removed super-triangle vertices in {step_time:.4f} seconds.", verbose, level=1)
+    log(f"Step 3: Removed super-triangle delaunay_node_coords in {step_time:.4f} seconds.", verbose, level=1)
     if verbose >=2:
-        log(f"Total vertices after removal: {len(vertices)}", verbose, level=2)
+        log(f"Total delaunay_node_coords after removal: {len(delaunay_node_coords)}", verbose, level=2)
 
-    # Step 4: Reindex the vertices in the triangles lists and remove the None values
+    # Step 4: Reindex the delaunay_node_coords in the triangles lists and remove the None values
     step_start = time()
-    num_removed = len(super_vertices)
+    num_removed = len(super_delaunay_node_coords)
     new_triangles = []
     for tri in triangles:
         if tri is not None:
-            # Reindex vertex IDs by subtracting the number of removed super-triangle vertices
+            # Reindex vertex IDs by subtracting the number of removed super-triangle delaunay_node_coords
             new_tri = tuple([v - num_removed for v in tri])
             new_triangles.append(new_tri)
     
     step_time = time() - step_start
-    log(f"Step 4: Reindexed vertices in triangles in {step_time:.4f} seconds.", verbose, level=1)
+    log(f"Step 4: Reindexed delaunay_node_coords in triangles in {step_time:.4f} seconds.", verbose, level=1)
     if verbose >=2:
         log(f"Total triangles after reindexing: {len(new_triangles)}", verbose, level=2)
     
-    # Step 5: Rebuild the vertex_to_triangles list
+    # Step 5: Rebuild the delaunay_node_elems list
     step_start = time()
-    new_vertex_to_triangles = [[] for _ in range(len(vertices))]
+    new_delaunay_node_elems = [[] for _ in range(len(delaunay_node_coords))]
     for tri_idx, tri in enumerate(new_triangles):
         for vertex in tri:
-            new_vertex_to_triangles[vertex].append(tri_idx)
+            new_delaunay_node_elems[vertex].append(tri_idx)
     
-    vertex_to_triangles.clear()
-    vertex_to_triangles.extend(new_vertex_to_triangles)
+    delaunay_node_elems.clear()
+    delaunay_node_elems.extend(new_delaunay_node_elems)
     step_time = time() - step_start
-    log(f"Step 5: Updated vertex_to_triangles in {step_time:.4f} seconds.", verbose, level=1)
+    log(f"Step 5: Updated delaunay_node_elems in {step_time:.4f} seconds.", verbose, level=1)
     if verbose >=2:
-        log(f"Total vertex-to-triangle mappings: {len(vertex_to_triangles)}", verbose, level=2)
+        log(f"Total vertex-to-triangle mappings: {len(delaunay_node_elems)}", verbose, level=2)
     
-    # Step 6: Rebuild the edge_to_triangle mapping
+    # Step 6: Rebuild the delaunay_dic_edge_triangle mapping
     step_start = time()
-    new_edge_to_triangle = {}
+    new_delaunay_dic_edge_triangle = {}
     for tri_idx, tri in enumerate(new_triangles):
         edges = [(tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])]
         
@@ -128,40 +128,40 @@ def clean_mesh(vertices, triangles, edge_to_triangle, super_vertices, vertex_to_
             # Sort the edge tuple so that edge (a, b) and (b, a) are treated the same
             edge = tuple(sorted(edge))
             
-            if edge not in new_edge_to_triangle:
+            if edge not in new_delaunay_dic_edge_triangle:
                 # First triangle associated with this edge
-                new_edge_to_triangle[edge] = tri_idx
+                new_delaunay_dic_edge_triangle[edge] = tri_idx
             else:
                 # Edge already has one triangle, convert to tuple if necessary
-                if isinstance(new_edge_to_triangle[edge], int):
+                if isinstance(new_delaunay_dic_edge_triangle[edge], int):
                     # Convert from single int to tuple of two triangles
-                    new_edge_to_triangle[edge] = (new_edge_to_triangle[edge], tri_idx)
+                    new_delaunay_dic_edge_triangle[edge] = (new_delaunay_dic_edge_triangle[edge], tri_idx)
                 else:
                     # It's already a tuple, so this case shouldn't normally happen
                     log(f"Warning: Edge {edge} already associated with multiple triangles.", verbose, level=2)
     
-    edge_to_triangle.clear()
-    edge_to_triangle.update(new_edge_to_triangle)
+    delaunay_dic_edge_triangle.clear()
+    delaunay_dic_edge_triangle.update(new_delaunay_dic_edge_triangle)
     step_time = time() - step_start
-    log(f"Step 6: Rebuilt edge_to_triangle mapping in {step_time:.4f} seconds.", verbose, level=1)
+    log(f"Step 6: Rebuilt delaunay_dic_edge_triangle mapping in {step_time:.4f} seconds.", verbose, level=1)
     if verbose >=2:
-        log(f"Total unique edges: {len(edge_to_triangle)}", verbose, level=2)
+        log(f"Total unique edges: {len(delaunay_dic_edge_triangle)}", verbose, level=2)
     
     total_time = time() - start_time
     log(f"Mesh cleaning completed in {total_time:.4f} seconds.", verbose, level=1)
     
-    return vertices, new_triangles, edge_to_triangle, vertex_to_triangles
+    return delaunay_node_coords, new_triangles, delaunay_dic_edge_triangle, delaunay_node_elems
 
 
-def filter_exterior_triangles(vertices, triangles, vertex_to_triangles, edge_to_triangle, polygon_outer_edges):
+def filter_exterior_triangles(delaunay_node_coords, triangles, delaunay_node_elems, delaunay_dic_edge_triangle, polygon_outer_edges):
     """
     Filters out exterior triangles such that the resulting boundary matches polygon_outer_edges.
 
     Parameters:
-    - vertices: List of vertices including the original point cloud and super-triangle vertices.
+    - delaunay_node_coords: List of delaunay_node_coords including the original point cloud and super-triangle delaunay_node_coords.
     - triangles: List of triangles, where each triangle is a tuple of three vertex indices (v0, v1, v2).
-    - vertex_to_triangles: List of lists, where each sublist contains triangle indices.
-    - edge_to_triangle: Dictionary mapping edges to triangle indices or tuples of two triangle indices.
+    - delaunay_node_elems: List of lists, where each sublist contains triangle indices.
+    - delaunay_dic_edge_triangle: Dictionary mapping edges to triangle indices or tuples of two triangle indices.
     - polygon_outer_edges: List of edges defining the outer boundary of the polygon. 
 
     Returns:
@@ -173,15 +173,15 @@ def filter_exterior_triangles(vertices, triangles, vertex_to_triangles, edge_to_
 
     # Create deep copies to avoid modifying the original data structures
     triangles_copy = copy.deepcopy(triangles)
-    edge_to_triangle_copy = copy.deepcopy(edge_to_triangle)
-    vertex_to_triangles_copy = copy.deepcopy(vertex_to_triangles)
+    delaunay_dic_edge_triangle_copy = copy.deepcopy(delaunay_dic_edge_triangle)
+    delaunay_node_elems_copy = copy.deepcopy(delaunay_node_elems)
 
     # Initialize a set for polygon_outer_edges for faster lookup
     polygon_outer_edges_set = set(get_edge(*edge) for edge in polygon_outer_edges)
 
     # Initialize current_outer_edges with edges that are currently boundaries
     current_outer_edges = set()
-    for edge, tri in edge_to_triangle_copy.items():
+    for edge, tri in delaunay_dic_edge_triangle_copy.items():
         standardized_edge = get_edge(*edge)
         if isinstance(tri, int):
             current_outer_edges.add(standardized_edge)
@@ -200,7 +200,7 @@ def filter_exterior_triangles(vertices, triangles, vertex_to_triangles, edge_to_
             continue
 
         # Get the triangle associated with this edge
-        tri_index = edge_to_triangle_copy.get(edge)
+        tri_index = delaunay_dic_edge_triangle_copy.get(edge)
         if tri_index is None:
             continue  # Edge might have been processed already
         if isinstance(tri_index, tuple):
@@ -221,12 +221,12 @@ def filter_exterior_triangles(vertices, triangles, vertex_to_triangles, edge_to_
                      get_edge(triangle[2], triangle[0])]
 
         # Delete the triangle using the provided delete_triangle function
-        delete_triangle(tri_index, triangles_copy, edge_to_triangle_copy, vertex_to_triangles_copy)
+        delete_triangle(tri_index, triangles_copy, delaunay_dic_edge_triangle_copy, delaunay_node_elems_copy)
 
         # After deletion, check each edge to see if it has become a boundary edge
         for te in tri_edges:
             # If the edge is now a boundary edge and not part of polygon_outer_edges, enqueue it
-            associated = edge_to_triangle_copy.get(te)
+            associated = delaunay_dic_edge_triangle_copy.get(te)
             if associated is not None:
                 if isinstance(associated, int):
                     # Edge is now a boundary edge
@@ -242,26 +242,26 @@ def filter_exterior_triangles(vertices, triangles, vertex_to_triangles, edge_to_
                 continue
 
     for tri_idx in exterior_triangle_indices:
-        delete_triangle(tri_idx, triangles, edge_to_triangle, vertex_to_triangles)
+        delete_triangle(tri_idx, triangles, delaunay_dic_edge_triangle, delaunay_node_elems)
 
 
-def convert_to_mesh_format(vertices, triangles):
+def convert_to_mesh_format(delaunay_node_coords, triangles):
     """
     Convert the data structures to a more efficient format for ulterior usage.
 
     Parameters:
-    - vertices: List of vertices coordinates.
+    - delaunay_node_coords: List of delaunay_node_coords coordinates.
     - triangles: List of triangles, where each triangle is a tuple of three vertex indices (v0, v1, v2).
 
     Returns:
-    - node_coord: List of vertices coordinates.
+    - node_coord: List of delaunay_node_coords coordinates.
     - numb_elem: Number of elements in the mesh.
     - elem2node: List of vertex indices
     - p_elem2node: Pointer for the elem2node list, indicating the start of each element of the mesh.
 
     """
 
-    node_coord = [ [vertices[i][0], vertices[i][1]] for i in range(len(vertices))]
+    node_coord = [ [delaunay_node_coords[i][0], delaunay_node_coords[i][1]] for i in range(len(delaunay_node_coords))]
     elem2node = []
     p_elem2node = [0]
 

@@ -50,50 +50,67 @@ def main():
     verbose = 2
 
 
-    # Generate a cloud of points and a boundary
-    boundary = generate_mandelbrot_boundary(resolution, max_iteration, verbose=verbose)
+    # Generate a polygon boundary 
+    boundary_node_coords = generate_mandelbrot_boundary(resolution, max_iteration, verbose=verbose) # Shape : len()
 
     # plot_points(boundary, title="Mandelbrot Boundary with resolution " + str(resolution) + " and max iteration " + str(max_iteration))
 
-    cloud_points, boundary_points, interior_points = generate_cloud(boundary, min_distance, verbose = verbose)
+    # Generate points on boundary for refinement and interior points
+    cloud_node_coords, boundary_node_coords, interior_node_coords = generate_cloud(boundary_node_coords, min_distance, verbose = verbose)
     # #reverse the order of the boundary points to be ccw
-    boundary_points = boundary_points[::-1]
+    boundary_node_coords = boundary_node_coords[::-1]
 
-    plot_points(cloud_points, title="Cloud Points based on Mandelbrot Boundary with resolution " + str(resolution) + " and min distance " + str(min_distance))
+    plot_points(cloud_node_coords, title="Cloud Points based on Mandelbrot Boundary with resolution " + str(resolution) + " and min distance " + str(min_distance))
 
     # Step 1 : Perform the DT on the convex hull to generate the bulk of the mesh
-    vertices, triangles, edge_to_triangle, vertex_to_triangles, (triangle_most_recent_idx, most_recent_idx) = delaunay_triangulation(cloud_points, verbose=verbose) # the vertices has the super triangle vertices at the beginning
+    delaunay_node_coords, delaunay_elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems, (triangle_most_recent_idx, most_recent_idx) = delaunay_triangulation(cloud_node_coords, verbose=verbose) # the delaunay_node_coords has the super triangle delaunay_node_coords at the beginning
 
-    plot_triangulation(vertices, triangles, title="Delaunay Triangulation based on Cloud Points")
+    # delaunay_node_coords = delaunay_node_coords
+    # triangles = elem_nodes (homogene)
+
+    # delaunay_dic_edge_triangle
+    # (1,2) indice des noeuds qui composent l'arrete
+    # {(1,2) : (5,8) } (5,8) indince des triangles
+
+    # delaunay_dic_edge_triangle[(1,2)] = (5,8)
+
+    # delaunay_node_elems
+    # [[1,2,4], [1,4,7]]
+
+    # delaunay_node_elems[0] = [1,2,4]
+
+    plot_triangulation(delaunay_node_coords, delaunay_elem_nodes, title="Delaunay Triangulation based on Cloud Points")
 
     # Step 2 : Perform the CDT on the boundary points to constrain the mesh and ensure that the futur boundary egdes are present
-    polygon_edges = generate_edges_from_points(boundary_points)
-    boundary_constrained_edges = convert_edges_to_ids(polygon_edges, vertices)
+    polygon_edges = generate_edges_from_points(boundary_node_coords)
+    boundary_constrained_edges = convert_edges_to_ids(polygon_edges, delaunay_node_coords)
 
 
-    vertices, triangles, edge_to_triangle, vertex_to_triangles = constrained_delaunay_triangulation(boundary_constrained_edges, vertices, triangles, edge_to_triangle, vertex_to_triangles, visualize=False, verbose =verbose)
+    delaunay_node_coords, delaunay_elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems = constrained_delaunay_triangulation(boundary_constrained_edges, delaunay_node_coords, delaunay_elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems, visualize=False, verbose =verbose)
 
 
     # Step 3 : Clean the mesh
-    super_vertices = [0, 1, 2]
-    vertices, new_triangles, edge_to_triangle, vertex_to_triangles = clean_mesh(vertices, triangles, edge_to_triangle, super_vertices, vertex_to_triangles, boundary_constrained_edges, verbose = verbose)
+    super_delaunay_node_coords = [0, 1, 2]
+    delaunay_node_coords, delaunay_elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems = clean_mesh(delaunay_node_coords, delaunay_elem_nodes, delaunay_dic_edge_triangle, super_delaunay_node_coords, delaunay_node_elems, boundary_constrained_edges, verbose = verbose)
 
-    plot_triangulation(vertices, new_triangles, title="Constrained Delaunay Triangulation based on Boundary Points")
+    # clean_dt
+
+    plot_triangulation(delaunay_node_coords, delaunay_elem_nodes, title="Constrained Delaunay Triangulation based on Boundary Points")
 
     # Step 4 : Convert mesh to data structure
-    node_coord, numb_elem, elem2node, p_elem2node = convert_to_mesh_format(vertices, new_triangles)
+    node_coords, numb_elems, elem2nodes, p_elem2nodes = convert_to_mesh_format(delaunay_node_coords, delaunay_elem_nodes)
 
-    # Transform to np array
-    node_coord = np.array(node_coord)
-    elem2node = np.array(elem2node)
-    p_elem2node = np.array(p_elem2node)
+    # Transform to np array ( amettre dans convert mesh)
+    node_coords = np.array(node_coords)
+    elem2nodes = np.array(elem2nodes)
+    p_elem2nodes = np.array(p_elem2nodes)
 
-    plot_adjancy_matrix(node_coord, elem2node, p_elem2node, title="Adjacency Matrix of the Mesh")
+    plot_adjancy_matrix(node_coords, elem2nodes, p_elem2nodes, title="Adjacency Matrix of the Mesh")
 
     # Step 5 : Apply RCM
-    new_node_coord, new_elem2node = apply_rcm(node_coord, elem2node, p_elem2node)
+    new_node_coords, new_elem2nodes = apply_rcm(node_coords, elem2nodes, p_elem2nodes)
 
-    plot_adjancy_matrix(new_node_coord, new_elem2node, p_elem2node, title="Adjacency Matrix of the Mesh after RCM")
+    plot_adjancy_matrix(new_node_coords, new_elem2nodes, p_elem2nodes, title="Adjacency Matrix of the Mesh after RCM")
 
     plt.show()
 

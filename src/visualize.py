@@ -9,7 +9,7 @@ import pickle
 
 
 # Visualization
-def plot_triangulation(vertices, triangles, title='Delaunay Triangulation'):
+def plot_triangulation(delaunay_node_coords, triangles, title='Delaunay Triangulation'):
     """
     Plots the triangulation using matplotlib.
     """
@@ -20,12 +20,12 @@ def plot_triangulation(vertices, triangles, title='Delaunay Triangulation'):
     for tri in triangles:
         if tri is not None:
             u, v, w = tri
-            triangle = [vertices[u], vertices[v], vertices[w], vertices[u]]
+            triangle = [delaunay_node_coords[u], delaunay_node_coords[v], delaunay_node_coords[w], delaunay_node_coords[u]]
             xs, ys = zip(*triangle)
             ax.plot(xs, ys, 'k-')
     
-    # # Plot vertices
-    # xs, ys = zip(*vertices)
+    # # Plot delaunay_node_coords
+    # xs, ys = zip(*delaunay_node_coords)
     # ax.plot(xs, ys, 'ro')
     
     ax.set_aspect('equal')
@@ -36,7 +36,7 @@ def plot_triangulation(vertices, triangles, title='Delaunay Triangulation'):
 
     plt.show()
 
-def visualize_walk_step(vertices, triangles, current_triangle_idx, q_idx, p_idx, r_idx, l_idx, step_number, action, initilization_triangles, main_traversal_triangles):
+def visualize_walk_step(delaunay_node_coords, triangles, current_triangle_idx, q_idx, p_idx, r_idx, l_idx, step_number, action, initilization_triangles, main_traversal_triangles):
     plt.figure(figsize=(14, 6))
 
     # Plot all triangles
@@ -44,8 +44,8 @@ def visualize_walk_step(vertices, triangles, current_triangle_idx, q_idx, p_idx,
         if triangle is None:
             continue
         else:
-            tri_x = [vertices[v][0] for v in triangle]
-            tri_y = [vertices[v][1] for v in triangle]
+            tri_x = [delaunay_node_coords[v][0] for v in triangle]
+            tri_y = [delaunay_node_coords[v][1] for v in triangle]
             if i in initilization_triangles:
                 plt.fill(tri_x, tri_y, color='lightcoral')
             elif i in main_traversal_triangles:
@@ -57,27 +57,27 @@ def visualize_walk_step(vertices, triangles, current_triangle_idx, q_idx, p_idx,
     # # Highlight the current triangle
     # if current_triangle_idx is not None:
     #     current_triangle = triangles[current_triangle_idx]
-    #     tri_x = [vertices[v][0] for v in current_triangle]
-    #     tri_y = [vertices[v][1] for v in current_triangle]
+    #     tri_x = [delaunay_node_coords[v][0] for v in current_triangle]
+    #     tri_y = [delaunay_node_coords[v][1] for v in current_triangle]
     #     plt.fill(tri_x, tri_y, 'yellow', alpha=0.3)
     
-    # # Plot all vertices
-    # x, y = zip(*vertices)
+    # # Plot all delaunay_node_coords
+    # x, y = zip(*delaunay_node_coords)
     # plt.scatter(x, y, c='blue')
     
     # Highlight special points
-    plt.scatter(*vertices[q_idx], c='red', s=100, label='q (start)')
-    plt.scatter(*vertices[p_idx], c='green', s=100, label='p (target)')
-    # plt.scatter(*vertices[r_idx], c='purple', s=100, label='r')
-    # plt.scatter(*vertices[l_idx], c='orange', s=100, label='l')
+    plt.scatter(*delaunay_node_coords[q_idx], c='red', s=100, label='q (start)')
+    plt.scatter(*delaunay_node_coords[p_idx], c='green', s=100, label='p (target)')
+    # plt.scatter(*delaunay_node_coords[r_idx], c='purple', s=100, label='r')
+    # plt.scatter(*delaunay_node_coords[l_idx], c='orange', s=100, label='l')
     
     # # Add labels
-    # for i, (x, y) in enumerate(vertices):
+    # for i, (x, y) in enumerate(delaunay_node_coords):
     #     plt.annotate(f'{i}', (x, y), xytext=(5, 5), textcoords='offset points')
     
     # # Draw the oriented ray from q to p
-    # q_x, q_y = vertices[q_idx]
-    # p_x, p_y = vertices[p_idx]
+    # q_x, q_y = delaunay_node_coords[q_idx]
+    # p_x, p_y = delaunay_node_coords[p_idx]
     # dx, dy = p_x - q_x, p_y - q_y
     # plt.arrow(q_x, q_y, dx, dy, head_width=0.05, head_length=0.1, fc='k', ec='k')
     
@@ -86,7 +86,7 @@ def visualize_walk_step(vertices, triangles, current_triangle_idx, q_idx, p_idx,
     plt.axis('equal')
     plt.show()
 
-def plot_triangulation_with_cdt_cavity(vertices, triangles, cavity):
+def plot_triangulation_with_cdt_cavity(delaunay_node_coords, triangles, cavity):
     """
     Plots the triangulation using matplotlib and highlights the CDT cavity.
     """
@@ -97,12 +97,12 @@ def plot_triangulation_with_cdt_cavity(vertices, triangles, cavity):
     for tri in triangles:
         if tri is not None:
             u, v, w = tri
-            triangle = [vertices[u], vertices[v], vertices[w], vertices[u]]
+            triangle = [delaunay_node_coords[u], delaunay_node_coords[v], delaunay_node_coords[w], delaunay_node_coords[u]]
             xs, ys = zip(*triangle)
             ax.plot(xs, ys, 'k-')
     
     # Plot cavity points
-    cavity_points = [vertices[idx] for idx in cavity]
+    cavity_points = [delaunay_node_coords[idx] for idx in cavity]
     xs, ys = zip(*cavity_points)
     ax.plot(xs, ys, 'b-')
 
@@ -110,7 +110,7 @@ def plot_triangulation_with_cdt_cavity(vertices, triangles, cavity):
     plt.title('Delaunay Triangulation with CDT Cavity')
     plt.show()
 
-def plot_triangulation_with_points(vertices, triangles, points):
+def plot_triangulation_with_points(delaunay_node_coords, triangles, points):
     """
     Plots the triangulation using matplotlib and highlights a specific point.
     """
@@ -120,12 +120,12 @@ def plot_triangulation_with_points(vertices, triangles, points):
     for tri in triangles:
         if tri is not None:
             u, v, w = tri
-            triangle = [vertices[u], vertices[v], vertices[w], vertices[u]]
+            triangle = [delaunay_node_coords[u], delaunay_node_coords[v], delaunay_node_coords[w], delaunay_node_coords[u]]
             xs, ys = zip(*triangle)
             ax.plot(xs, ys, 'k-')
     
-    # # Plot vertices
-    # xs, ys = zip(*vertices)
+    # # Plot delaunay_node_coords
+    # xs, ys = zip(*delaunay_node_coords)
     # ax.plot(xs, ys, 'ro')
     
     # Highlight the specific points
@@ -151,7 +151,7 @@ def plot_points_ordered(points):
     plt.grid(True)
     plt.show()
 
-def plot_triangulation_with_points_ordered(vertices, triangles, points):
+def plot_triangulation_with_points_ordered(delaunay_node_coords, triangles, points):
     """
     Plots the triangulation using matplotlib and highlights a specific point.
     """
@@ -162,12 +162,12 @@ def plot_triangulation_with_points_ordered(vertices, triangles, points):
     for tri in triangles:
         if tri is not None:
             u, v, w = tri
-            triangle = [vertices[u], vertices[v], vertices[w], vertices[u]]
+            triangle = [delaunay_node_coords[u], delaunay_node_coords[v], delaunay_node_coords[w], delaunay_node_coords[u]]
             xs, ys = zip(*triangle)
             ax.plot(xs, ys, 'k-')
     
-    # Plot vertices
-    xs, ys = zip(*vertices)
+    # Plot delaunay_node_coords
+    xs, ys = zip(*delaunay_node_coords)
     ax.plot(xs, ys, 'ro')
     
     # Highlight the specific points in order
@@ -179,14 +179,14 @@ def plot_triangulation_with_points_ordered(vertices, triangles, points):
     plt.title('Delaunay Triangulation with Points')
     plt.show()
 
-def visualize_intersecting_triangle(vertices, triangles, bad_triangles, start_idx, end_idx):
+def visualize_intersecting_triangle(delaunay_node_coords, triangles, bad_triangles, start_idx, end_idx):
 
     # Plot all triangles
     for i, triangle in enumerate(triangles):
         if triangle is not None:
             a, b, c = triangle
-            tri_x = [vertices[v][0] for v in [a, b, c, a]]
-            tri_y = [vertices[v][1] for v in [a, b, c, a]]
+            tri_x = [delaunay_node_coords[v][0] for v in [a, b, c, a]]
+            tri_y = [delaunay_node_coords[v][1] for v in [a, b, c, a]]
             
             # Highlight bad triangles in red
             if i in bad_triangles:
@@ -198,25 +198,25 @@ def visualize_intersecting_triangle(vertices, triangles, bad_triangles, start_id
                 plt.plot(tri_x, tri_y, 'k-')
 
     # Highlight the start and end points
-    plt.scatter(*vertices[start_idx], c='red', s=100, label='Start point')
-    plt.scatter(*vertices[end_idx], c='red', s=100, label='End point')
+    plt.scatter(*delaunay_node_coords[start_idx], c='red', s=100, label='Start point')
+    plt.scatter(*delaunay_node_coords[end_idx], c='red', s=100, label='End point')
 
     # Draw the line from start to end
-    plt.plot([vertices[start_idx][0], vertices[end_idx][0]], [vertices[start_idx][1], vertices[end_idx][1]], 'k-', lw=2, color='red')
+    plt.plot([delaunay_node_coords[start_idx][0], delaunay_node_coords[end_idx][0]], [delaunay_node_coords[start_idx][1], delaunay_node_coords[end_idx][1]], 'k-', lw=2, color='red')
 
     plt.legend()
     plt.title('Finding Intersecting Triangle')
     plt.axis('equal')
     plt.show()
 
-def visualize_bad_triangles(vertices, triangles, bad_triangles, u_idx, step_number):
+def visualize_bad_triangles(delaunay_node_coords, triangles, bad_triangles, u_idx, step_number):
 
     # Plot all triangles
     for i, triangle in enumerate(triangles):
         if triangle is not None:
             a, b, c = triangle
-            tri_x = [vertices[v][0] for v in [a, b, c, a]]
-            tri_y = [vertices[v][1] for v in [a, b, c, a]]
+            tri_x = [delaunay_node_coords[v][0] for v in [a, b, c, a]]
+            tri_y = [delaunay_node_coords[v][1] for v in [a, b, c, a]]
             
             # Highlight bad triangles in red
             if i in bad_triangles:
@@ -224,7 +224,7 @@ def visualize_bad_triangles(vertices, triangles, bad_triangles, u_idx, step_numb
                 plt.plot(tri_x, tri_y, 'k-')
 
                 # Draw circumcircle for bad triangles
-                center, radius = get_circumcircle(vertices[a], vertices[b], vertices[c])
+                center, radius = get_circumcircle(delaunay_node_coords[a], delaunay_node_coords[b], delaunay_node_coords[c])
                 circle = Circle(center, radius, fill=False, linestyle='--', color='blue')
                 plt.gca().add_artist(circle)
             else:
@@ -232,21 +232,21 @@ def visualize_bad_triangles(vertices, triangles, bad_triangles, u_idx, step_numb
                 plt.plot(tri_x, tri_y, 'k-')
 
     # Highlight the new point u
-    plt.scatter(*vertices[u_idx], c='green', s=100, label='New point u')
+    plt.scatter(*delaunay_node_coords[u_idx], c='green', s=100, label='New point u')
 
     plt.legend()
     plt.title(f'Step {step_number}: Displaying Bad Triangles and Circumcircles\nBad Triangles: {bad_triangles}')
     plt.axis('equal')
     plt.show()
 
-def visualize_bad_triangles_step(vertices, triangles, bad_triangles, current_triangle, u_idx, step_number):
+def visualize_bad_triangles_step(delaunay_node_coords, triangles, bad_triangles, current_triangle, u_idx, step_number):
 
     # Plot all triangles
     for i, triangle in enumerate(triangles):
         if triangle is not None:
             a, b, c = triangle
-            tri_x = [vertices[v][0] for v in [a, b, c, a]]
-            tri_y = [vertices[v][1] for v in [a, b, c, a]]
+            tri_x = [delaunay_node_coords[v][0] for v in [a, b, c, a]]
+            tri_y = [delaunay_node_coords[v][1] for v in [a, b, c, a]]
             if i in bad_triangles:
                 plt.fill(tri_x, tri_y, 'red', alpha=0.3)
             else:
@@ -256,24 +256,24 @@ def visualize_bad_triangles_step(vertices, triangles, bad_triangles, current_tri
     # Highlight the current triangle
     if current_triangle is not None:
         a, b, c = triangles[current_triangle]
-        tri_x = [vertices[v][0] for v in [a, b, c, a]]
-        tri_y = [vertices[v][1] for v in [a, b, c, a]]
+        tri_x = [delaunay_node_coords[v][0] for v in [a, b, c, a]]
+        tri_y = [delaunay_node_coords[v][1] for v in [a, b, c, a]]
         plt.fill(tri_x, tri_y, 'yellow', alpha=0.5)
 
         # Draw circumcircle
-        center, radius = get_circumcircle(vertices[a], vertices[b], vertices[c])
+        center, radius = get_circumcircle(delaunay_node_coords[a], delaunay_node_coords[b], delaunay_node_coords[c])
         circle = Circle(center, radius, fill=False, linestyle='--', color='blue')
         plt.gca().add_artist(circle)
 
-    # Plot all vertices
-    x, y = zip(*vertices)
+    # Plot all delaunay_node_coords
+    x, y = zip(*delaunay_node_coords)
     plt.scatter(x, y, c='blue', s=50)
 
     # Highlight the new point u
-    plt.scatter(*vertices[u_idx], c='green', s=100, label='New point u')
+    plt.scatter(*delaunay_node_coords[u_idx], c='green', s=100, label='New point u')
 
-    # Add labels to vertices
-    for i, (x, y) in enumerate(vertices):
+    # Add labels to delaunay_node_coords
+    for i, (x, y) in enumerate(delaunay_node_coords):
         plt.annotate(f'{i}', (x, y), xytext=(5, 5), textcoords='offset points')
 
     plt.legend()
@@ -281,14 +281,14 @@ def visualize_bad_triangles_step(vertices, triangles, bad_triangles, current_tri
     plt.axis('equal')
     plt.show()
 
-def plot_edges_from_idx(vertices, edges):
+def plot_edges_from_idx(delaunay_node_coords, edges):
     """
     Plots the edges of a polygon given the vertex indices.
     """
     plt.figure(figsize=(6, 6))
     for edge in edges:
         u, v = edge
-        plt.plot([vertices[u][0], vertices[v][0]], [vertices[u][1], vertices[v][1]], 'b-')
+        plt.plot([delaunay_node_coords[u][0], delaunay_node_coords[v][0]], [delaunay_node_coords[u][1], delaunay_node_coords[v][1]], 'b-')
     plt.gca().set_aspect('equal', adjustable='box')
     plt.title('Polygon Edges')
     plt.xlabel('X')
@@ -296,18 +296,18 @@ def plot_edges_from_idx(vertices, edges):
     plt.grid(True)
     plt.show()
 
-def plot_points(vertices, point_size=0.5, point_color='blue', alpha=1.0, title='Points'):
+def plot_points(delaunay_node_coords, point_size=0.5, point_color='blue', alpha=1.0, title='Points'):
     """
     Plots a list of points with adjustable size, color, and transparency.
     
     Args:
-        vertices (list of tuples): List of (x, y) coordinates to plot.
+        delaunay_node_coords (list of tuples): List of (x, y) coordinates to plot.
         point_size (int, optional): Size of the points. Default is 5.
         point_color (str, optional): Color of the points. Default is 'blue'.
         alpha (float, optional): Transparency level of the points. Default is 1.0 (opaque).
     """
     plt.figure(figsize=(6, 6))
-    x, y = zip(*vertices)
+    x, y = zip(*delaunay_node_coords)
     plt.scatter(x, y, s=point_size, c=point_color, alpha=alpha)
     plt.gca().set_aspect('equal', adjustable='box')
     plt.title(title)
@@ -316,7 +316,7 @@ def plot_points(vertices, point_size=0.5, point_color='blue', alpha=1.0, title='
     plt.grid(True)
     plt.show()
 
-def plot_edges_from_coords(vertices, edges):
+def plot_edges_from_coords(delaunay_node_coords, edges):
     """
     Plots the edges of a polygon given the vertex coordinates.
     """
@@ -332,17 +332,17 @@ def plot_edges_from_coords(vertices, edges):
     plt.show()
 
 
-def visualize_brio(biaised_random_ordering_idx, point_cloud):
+def visualize_brio(biaised_random_ordering_idx, cloud_node_coords):
     """
     Visualizes the BRIO (Biased Random Insertion Order) process.
     
     Parameters:
     - biaised_random_ordering_idx: List of indices representing the BRIO order.
-    - point_cloud: List of points (tuples of (x, y)) to visualize.
+    - cloud_node_coords: List of points (tuples of (x, y)) to visualize.
     """
     
     # Ensure that the point cloud is a NumPy array for easier indexing
-    point_cloud = np.array(point_cloud)
+    cloud_node_coords = np.array(cloud_node_coords)
 
     # Create a figure for the visualization
     plt.figure(figsize=(8, 8))
@@ -351,11 +351,11 @@ def visualize_brio(biaised_random_ordering_idx, point_cloud):
     # Plot the points step-by-step according to the BRIO order
     for i, idx in enumerate(biaised_random_ordering_idx):
         # Get the current point to plot
-        current_point = point_cloud[idx]
+        current_point = cloud_node_coords[idx]
         
         # Plot all points added so far
-        plt.scatter(point_cloud[biaised_random_ordering_idx[:i+1], 0], 
-                    point_cloud[biaised_random_ordering_idx[:i+1], 1], 
+        plt.scatter(cloud_node_coords[biaised_random_ordering_idx[:i+1], 0], 
+                    cloud_node_coords[biaised_random_ordering_idx[:i+1], 1], 
                     c='blue', label=f'Step {i+1}' if i == 0 else "")
         
         # Highlight the current point being added
@@ -373,18 +373,18 @@ def visualize_brio(biaised_random_ordering_idx, point_cloud):
         plt.pause(0.5)
         
     # Display the final result
-    plt.scatter(point_cloud[:, 0], point_cloud[:, 1], c='blue')
+    plt.scatter(cloud_node_coords[:, 0], cloud_node_coords[:, 1], c='blue')
     plt.show()
 
 
-def visualize_walk_to_point(vertices, triangles, current_triangle_idx, q_idx, p_idx, r_idx, l_idx, step_number, action, initilization_triangles, main_traversal_triangles):
+def visualize_walk_to_point(delaunay_node_coords, triangles, current_triangle_idx, q_idx, p_idx, r_idx, l_idx, step_number, action, initilization_triangles, main_traversal_triangles):
     # Plot all triangles
     for i, triangle in enumerate(triangles):
         if triangle is None:
             continue
         else:
-            tri_x = [vertices[v][0] for v in triangle]
-            tri_y = [vertices[v][1] for v in triangle]
+            tri_x = [delaunay_node_coords[v][0] for v in triangle]
+            tri_y = [delaunay_node_coords[v][1] for v in triangle]
             if i in initilization_triangles:
                 plt.fill(tri_x, tri_y, color='lightcoral')
             elif i in main_traversal_triangles:
@@ -394,12 +394,12 @@ def visualize_walk_to_point(vertices, triangles, current_triangle_idx, q_idx, p_
             plt.plot(tri_x + [tri_x[0]], tri_y + [tri_y[0]], 'k-')
 
     # Highlight special points
-    plt.scatter(*vertices[q_idx], c='red', s=100, label='q (start)')
-    plt.scatter(*vertices[p_idx], c='green', s=100, label='p (target)')
+    plt.scatter(*delaunay_node_coords[q_idx], c='red', s=100, label='q (start)')
+    plt.scatter(*delaunay_node_coords[p_idx], c='green', s=100, label='p (target)')
 
     # Draw the ray from q to p with an arrowhead that stops exactly at point p
-    q_x, q_y = vertices[q_idx]
-    p_x, p_y = vertices[p_idx]
+    q_x, q_y = delaunay_node_coords[q_idx]
+    p_x, p_y = delaunay_node_coords[p_idx]
 
     # Plot the line from q to p
     plt.plot([q_x, p_x], [q_y, p_y], 'k-', lw=2, color='green')
@@ -439,7 +439,7 @@ def plot_adjancy_matrix(node_coord, elem2node, p_elem2node, title="Adjacency Mat
     plt.title(title)
     plt.show()
 
-def plot_triangulation_and_edge(vertices, triangles, edge, title="Triangulation with Edge"):
+def plot_triangulation_and_edge(delaunay_node_coords, triangles, edge, title="Triangulation with Edge"):
     """
     Plots the triangulation using matplotlib and highlights a specific edge.
     """
@@ -449,21 +449,21 @@ def plot_triangulation_and_edge(vertices, triangles, edge, title="Triangulation 
     for tri in triangles:
         if tri is not None:
             u, v, w = tri
-            triangle = [vertices[u], vertices[v], vertices[w], vertices[u]]
+            triangle = [delaunay_node_coords[u], delaunay_node_coords[v], delaunay_node_coords[w], delaunay_node_coords[u]]
             xs, ys = zip(*triangle)
             ax.plot(xs, ys, 'k-')
     
     # Highlight the specific edge
     u, v = edge
-    edge_x = [vertices[u][0], vertices[v][0]]
-    edge_y = [vertices[u][1], vertices[v][1]]
+    edge_x = [delaunay_node_coords[u][0], delaunay_node_coords[v][0]]
+    edge_y = [delaunay_node_coords[u][1], delaunay_node_coords[v][1]]
     ax.plot(edge_x, edge_y, 'r-', linewidth=2)
     
     ax.set_aspect('equal')
     plt.title(title)
     plt.show()
 
-def plot_triangulation_with_points_and_marked_triangles(vertices, triangles, points, marked_triangles):
+def plot_triangulation_with_points_and_marked_triangles(delaunay_node_coords, triangles, points, marked_triangles):
     """
     Plots the triangulation using matplotlib and highlights a specific point and triangles.
     """
@@ -473,12 +473,12 @@ def plot_triangulation_with_points_and_marked_triangles(vertices, triangles, poi
     for tri in triangles:
         if tri is not None:
             u, v, w = tri
-            triangle = [vertices[u], vertices[v], vertices[w], vertices[u]]
+            triangle = [delaunay_node_coords[u], delaunay_node_coords[v], delaunay_node_coords[w], delaunay_node_coords[u]]
             xs, ys = zip(*triangle)
             ax.plot(xs, ys, 'k-')
     
-    # Plot vertices
-    xs, ys = zip(*vertices)
+    # Plot delaunay_node_coords
+    xs, ys = zip(*delaunay_node_coords)
     ax.plot(xs, ys, 'ro')
     
     # Highlight the specific points
@@ -488,7 +488,7 @@ def plot_triangulation_with_points_and_marked_triangles(vertices, triangles, poi
     # Highlight the marked triangles
     for tri_idx in marked_triangles:
         u, v, w = triangles[tri_idx]
-        triangle = [vertices[u], vertices[v], vertices[w], vertices[u]]
+        triangle = [delaunay_node_coords[u], delaunay_node_coords[v], delaunay_node_coords[w], delaunay_node_coords[u]]
         xs, ys = zip(*triangle)
         ax.fill(xs, ys, 'r', alpha=0.3)
     

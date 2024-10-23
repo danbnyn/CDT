@@ -24,26 +24,26 @@ from src.dt_utils import (
     walk_to_point
     )
 
-def ignore_during_traversal(r_idx, l_idx, start_idx, target_idx, vertices):
+def ignore_during_traversal(r_idx, l_idx, start_idx, target_idx, delaunay_node_coords):
     """
     Check if one of the point is collinear with the starting and target point. If so we ignore it during the traversal, since it means it doesn't intersect the triangle.
     """
 
-    if orient(l_idx, start_idx, target_idx, vertices) == 0 or orient(r_idx, start_idx, target_idx, vertices) == 0:
+    if orient(l_idx, start_idx, target_idx, delaunay_node_coords) == 0 or orient(r_idx, start_idx, target_idx, delaunay_node_coords) == 0:
         return True
     return False
 
-def find_intersecting_triangle(start_idx, target_idx, vertices, triangles, edge_to_triangle, vertex_to_triangles, visualize=False):
+def find_intersecting_triangle(start_idx, target_idx, delaunay_node_coords, triangles, delaunay_dic_edge_triangle, delaunay_node_elems, visualize=False):
     """
     Finds all triangles in the triangulation that are intersected by the interior of the given edge s = (start_idx, target_idx).
     
     Parameters:
     - start_idx: Index of the starting vertex p.
     - target_idx: Index of the point q to locate.
-    - vertices: List of vertex coordinates.
+    - delaunay_node_coords: List of vertex coordinates.
     - triangles: List of triangles (each triangle is represented as a tuple of 3 vertex indices).
-    - edge_to_triangle: Dictionary mapping edges to one or two triangle indices.
-    - vertex_to_triangles: List of lists, where each sublist contains triangle indices.
+    - delaunay_dic_edge_triangle: Dictionary mapping edges to one or two triangle indices.
+    - delaunay_node_elems: List of lists, where each sublist contains triangle indices.
     - visualize: Boolean flag to enable or disable visualization of the walk steps.
 
     
@@ -51,7 +51,7 @@ def find_intersecting_triangle(start_idx, target_idx, vertices, triangles, edge_
     - intersecting_triangles: Set of triangle indices that are intersected by the interior of the edge.
     """
 
-    current_triangle_idx = get_one_triangle_of_vertex(start_idx, vertex_to_triangles, triangles)
+    current_triangle_idx = get_one_triangle_of_vertex(start_idx, delaunay_node_elems, triangles)
 
     if current_triangle_idx == target_idx or start_idx == target_idx:
         return [current_triangle_idx]
@@ -65,15 +65,15 @@ def find_intersecting_triangle(start_idx, target_idx, vertices, triangles, edge_
 
     current_triangle = triangles[current_triangle_idx]
 
-    # Get the two other vertices of the current triangle
-    other_vertices = [v for v in current_triangle if v != start_idx]
-    if len(other_vertices) != 2:
+    # Get the two other delaunay_node_coords of the current triangle
+    other_delaunay_node_coords = [v for v in current_triangle if v != start_idx]
+    if len(other_delaunay_node_coords) != 2:
         raise ValueError("Invalid triangle configuration.")
 
-    v1_idx, v2_idx = other_vertices
+    v1_idx, v2_idx = other_delaunay_node_coords
 
     # Determine the orientation of the triangle formed by start_idx, v1_idx, v2_idx
-    orientation = orient(start_idx, v1_idx, v2_idx, vertices)
+    orientation = orient(start_idx, v1_idx, v2_idx, delaunay_node_coords)
     if orientation < 0:
         # Triangle is counter-clockwise
         r_idx = v1_idx
@@ -85,15 +85,15 @@ def find_intersecting_triangle(start_idx, target_idx, vertices, triangles, edge_
 
     step_number += 1
     # if visualize:
-    #     visualize_walk_step(vertices, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx,
+    #     visualize_walk_step(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx,
     #                         step_number, "Initial setup", initilization_triangles, main_traversal_triangles)
 
 
-    if orient(start_idx, target_idx, r_idx, vertices) > 0:
-        while orient(start_idx, target_idx, l_idx, vertices) > 0:
+    if orient(start_idx, target_idx, r_idx, delaunay_node_coords) > 0:
+        while orient(start_idx, target_idx, l_idx, delaunay_node_coords) > 0:
             step_number += 1
             r_idx = l_idx
-            neighbor_triangle_idx = get_neighbor_through_edge(current_triangle_idx, (start_idx, l_idx), edge_to_triangle)
+            neighbor_triangle_idx = get_neighbor_through_edge(current_triangle_idx, (start_idx, l_idx), delaunay_dic_edge_triangle)
             
             if neighbor_triangle_idx == -1:
                 # Check if neighbor_triangle_idx is has the target_idx
@@ -107,17 +107,17 @@ def find_intersecting_triangle(start_idx, target_idx, vertices, triangles, edge_
             current_triangle = triangles[current_triangle_idx]
             l_idx = next(v for v in current_triangle if v != start_idx and v != r_idx)
             # if visualize:
-            #     visualize_walk_step(vertices, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
+            #     visualize_walk_step(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
             #                         step_number, "Rotating", initilization_triangles, main_traversal_triangles)
                 
-            if in_triangle(start_idx, r_idx, l_idx, target_idx, vertices):
+            if in_triangle(start_idx, r_idx, l_idx, target_idx, delaunay_node_coords):
                 return [current_triangle_idx]
     else:
         cond = True
         while cond:
             step_number += 1
             l_idx = r_idx
-            neighbor_triangle_idx = get_neighbor_through_edge(current_triangle_idx, (start_idx, r_idx), edge_to_triangle)
+            neighbor_triangle_idx = get_neighbor_through_edge(current_triangle_idx, (start_idx, r_idx), delaunay_dic_edge_triangle)
             
             if neighbor_triangle_idx == -1:
                 # Check if neighbor_triangle_idx is has the target_idx
@@ -132,12 +132,12 @@ def find_intersecting_triangle(start_idx, target_idx, vertices, triangles, edge_
             current_triangle = triangles[current_triangle_idx]
             r_idx = next(v for v in current_triangle if v != start_idx and v != l_idx)
             
-            cond = orient(start_idx, target_idx, r_idx, vertices) <= 0
+            cond = orient(start_idx, target_idx, r_idx, delaunay_node_coords) <= 0
             # if visualize:
-            #     visualize_walk_step(vertices, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
+            #     visualize_walk_step(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
             #                         step_number, "Rotating", initilization_triangles, main_traversal_triangles)
             
-            if in_triangle(start_idx, r_idx, l_idx, target_idx, vertices):
+            if in_triangle(start_idx, r_idx, l_idx, target_idx, delaunay_node_coords):
                 return [current_triangle_idx]
 
 
@@ -145,7 +145,7 @@ def find_intersecting_triangle(start_idx, target_idx, vertices, triangles, edge_
 
     main_traversal_triangles = []
 
-    if not ignore_during_traversal(r_idx, l_idx, start_idx, target_idx, vertices):
+    if not ignore_during_traversal(r_idx, l_idx, start_idx, target_idx, delaunay_node_coords):
         main_traversal_triangles.append(current_triangle_idx)
 
 
@@ -154,15 +154,15 @@ def find_intersecting_triangle(start_idx, target_idx, vertices, triangles, edge_
 
 
     # Straight walk along the triangulation
-    while orient(target_idx, r_idx, l_idx, vertices) <= 0:
+    while orient(target_idx, r_idx, l_idx, delaunay_node_coords) <= 0:
 
-        if in_triangle(start_idx, r_idx, l_idx, target_idx, vertices):
+        if in_triangle(start_idx, r_idx, l_idx, target_idx, delaunay_node_coords):
             if visualize:
-                visualize_intersecting_triangle(vertices, triangles, main_traversal_triangles, start_idx, target_idx)
+                visualize_intersecting_triangle(delaunay_node_coords, triangles, main_traversal_triangles, start_idx, target_idx)
             return main_traversal_triangles
 
         step_number += 1
-        neighbor_triangle_idx = get_neighbor_through_edge(current_triangle_idx, (r_idx, l_idx), edge_to_triangle)
+        neighbor_triangle_idx = get_neighbor_through_edge(current_triangle_idx, (r_idx, l_idx), delaunay_dic_edge_triangle)
 
         if neighbor_triangle_idx == -1:
             # Check if neighbor_triangle_idx is has the target_idx
@@ -173,30 +173,30 @@ def find_intersecting_triangle(start_idx, target_idx, vertices, triangles, edge_
         
         current_triangle_idx = neighbor_triangle_idx
 
-        if not ignore_during_traversal(r_idx, l_idx, start_idx, target_idx, vertices):
+        if not ignore_during_traversal(r_idx, l_idx, start_idx, target_idx, delaunay_node_coords):
             main_traversal_triangles.append(current_triangle_idx)
         current_triangle = triangles[current_triangle_idx]
         s_idx = next(v for v in current_triangle if v != r_idx and v != l_idx)
 
-        if orient(s_idx, start_idx, target_idx, vertices) <= 0:
+        if orient(s_idx, start_idx, target_idx, delaunay_node_coords) <= 0:
             r_idx = s_idx
         else:
             l_idx = s_idx
         # if visualize:
-        #     visualize_walk_step(vertices, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
+        #     visualize_walk_step(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
         #                         step_number, "Main path finding", initilization_triangles, main_traversal_triangles)
 
 
     return main_traversal_triangles 
 
-def find_cavities(u, v, intersected_triangles, vertices, triangles):
+def find_cavities(u, v, intersected_triangles, delaunay_node_coords, triangles):
     """
     Identifies the two polygonal cavities formed on each side of the constraint edge s = (u, v).
 
     Parameters:
     - u, v: Vertex indices defining the constraint edge s.
     - intersected_triangles: Set of triangle indices that were intersected by s.
-    - vertices: List of vertex coordinates.
+    - delaunay_node_coords: List of vertex coordinates.
     - triangles: List of triangles (each triangle is represented as a tuple of 3 vertex indices).
 
 
@@ -219,7 +219,7 @@ def find_cavities(u, v, intersected_triangles, vertices, triangles):
     try:
         cavity1 = traverse_path(u, v, adjacency)
     except ValueError as e:
-        plot_triangulation_with_points(vertices, triangles, [vertices[u], vertices[v]])
+        plot_triangulation_with_points(delaunay_node_coords, triangles, [delaunay_node_coords[u], delaunay_node_coords[v]])
         raise ValueError(f"Error while traversing first cavity: {e}")
 
     # Remove the edges of cavity1 from the adjacency to isolate cavity2
@@ -230,9 +230,9 @@ def find_cavities(u, v, intersected_triangles, vertices, triangles):
     except ValueError as e:
         raise ValueError(f"Error while traversing second cavity: {e}")
 
-    # Step 5: Order the Cavity Vertices in CCW Order
-    cavity1_ordered = order_cavity_vertices(cavity1, vertices)
-    cavity2_ordered = order_cavity_vertices(cavity2, vertices)
+    # Step 5: Order the Cavity delaunay_node_coords in CCW Order
+    cavity1_ordered = order_cavity_delaunay_node_coords(cavity1, delaunay_node_coords)
+    cavity2_ordered = order_cavity_delaunay_node_coords(cavity2, delaunay_node_coords)
 
     return [cavity1_ordered, cavity2_ordered]
 
@@ -277,7 +277,7 @@ def build_adjacency_map(boundary_edges):
     - boundary_edges: Set of boundary edges (sorted tuples of vertex indices).
 
     Returns:
-    - A dictionary mapping each vertex to a set of its adjacent vertices via boundary edges.
+    - A dictionary mapping each vertex to a set of its adjacent delaunay_node_coords via boundary edges.
     """
     adjacency = {}
 
@@ -338,13 +338,13 @@ def remove_edges_from_adjacency(path, adjacency):
         if a in adjacency.get(b, set()):
             adjacency[b].remove(a)
 
-def compute_polygon_orientation(polygon, vertices):
+def compute_polygon_orientation(polygon, delaunay_node_coords):
     """
     Computes the orientation of a polygon.
 
     Parameters:
     - polygon: An ordered list of vertex indices representing the polygon.
-    - vertices: List of vertex coordinates.
+    - delaunay_node_coords: List of vertex coordinates.
 
     Returns:
     - "CCW" if the polygon is counterclockwise.
@@ -355,8 +355,8 @@ def compute_polygon_orientation(polygon, vertices):
     n = len(polygon)
 
     for i in range(n):
-        x1, y1 = vertices[polygon[i]]
-        x2, y2 = vertices[polygon[(i + 1) % n]]
+        x1, y1 = delaunay_node_coords[polygon[i]]
+        x2, y2 = delaunay_node_coords[polygon[(i + 1) % n]]
         area += (x1 * y2) - (x2 * y1)
 
     if area > 0:
@@ -366,13 +366,13 @@ def compute_polygon_orientation(polygon, vertices):
     else:
         return "COLINEAR"
 
-def order_cavity_vertices(cavity_path, vertices):
+def order_cavity_delaunay_node_coords(cavity_path, delaunay_node_coords):
     """
-    Orders the cavity vertices in counterclockwise order around the cavity.
+    Orders the cavity delaunay_node_coords in counterclockwise order around the cavity.
 
     Parameters:
     - cavity_path: An ordered list of vertex indices representing the cavity path from u to v.
-    - vertices: List of vertex coordinates.
+    - delaunay_node_coords: List of vertex coordinates.
 
     Returns:
     - An ordered list of vertex indices in CCW order, starting at u and ending at v.
@@ -381,7 +381,7 @@ def order_cavity_vertices(cavity_path, vertices):
     # Create a closed loop by appending the start vertex to the end
     closed_loop = cavity_path + [cavity_path[0]]
 
-    orientation = compute_polygon_orientation(closed_loop, vertices)
+    orientation = compute_polygon_orientation(closed_loop, delaunay_node_coords)
 
     if orientation == "CW":
         # If the loop is clockwise, reverse it to make it counterclockwise
@@ -392,10 +392,10 @@ def order_cavity_vertices(cavity_path, vertices):
 
     return ordered_path
 
-def walk_to_point_constrained(start_idx, target_idx, vertices, triangles, edge_to_triangle, vertex_to_triangle, start_triangle_idx, visualize=False):
+def walk_to_point_constrained(start_idx, target_idx, delaunay_node_coords, triangles, delaunay_dic_edge_triangle, delaunay_node_elems, start_triangle_idx, visualize=False):
 
     # Start by callking walk_to_point to find the initial triangle
-    initial_bad_idx = walk_to_point(start_idx, target_idx, vertices, triangles, edge_to_triangle, vertex_to_triangle, start_triangle_idx, visualize)
+    initial_bad_idx = walk_to_point(start_idx, target_idx, delaunay_node_coords, triangles, delaunay_dic_edge_triangle, delaunay_node_elems, start_triangle_idx, visualize)
 
     initial_bad = triangles[initial_bad_idx]
 
@@ -403,9 +403,9 @@ def walk_to_point_constrained(start_idx, target_idx, vertices, triangles, edge_t
     bad_edges = [sorted((initial_bad[0], initial_bad[1])), sorted((initial_bad[1], initial_bad[2])), sorted((initial_bad[2], initial_bad[0]))]
 
     for edge in bad_edges:
-        if is_point_on_edge(target_idx, edge, vertices):
-            # Get the other triangle that shares the edge from the edge_to_triangle
-            triangles_idx = edge_to_triangle[tuple(edge)]
+        if is_point_on_edge(target_idx, edge, delaunay_node_coords):
+            # Get the other triangle that shares the edge from the delaunay_dic_edge_triangle
+            triangles_idx = delaunay_dic_edge_triangle[tuple(edge)]
             # Get the triangle that is not the initial_bad triangle from triangles_idx, knowing an edge is shared by only two triangles
             other_bad_triangle_idx = triangles_idx[0] if triangles_idx[0] != initial_bad else triangles_idx[1]
             
@@ -413,7 +413,7 @@ def walk_to_point_constrained(start_idx, target_idx, vertices, triangles, edge_t
     
     return [initial_bad_idx]
 
-def find_bad_triangles_constrained(initial_bads, u_idx, vertices, triangles, edge_to_triangle, constrained_edges_set, visualize=False):
+def find_bad_triangles_constrained(initial_bads, u_idx, delaunay_node_coords, triangles, delaunay_dic_edge_triangle, constrained_edges_set, visualize=False):
     """
     Finds all the bad triangles whose circumcircles contain the new point u_idx,
     without crossing constrained edges.
@@ -421,9 +421,9 @@ def find_bad_triangles_constrained(initial_bads, u_idx, vertices, triangles, edg
     Parameters:
     - initial_bads: List of indices of initial bad triangles.
     - u_idx: Index of the point to be inserted.
-    - vertices: List of vertex coordinates.
+    - delaunay_node_coords: List of vertex coordinates.
     - triangles: List of existing triangles.
-    - edge_to_triangle: Dictionary mapping edges to triangle indices or tuples of triangle indices.
+    - delaunay_dic_edge_triangle: Dictionary mapping edges to triangle indices or tuples of triangle indices.
     - constrained_edges_set: Set of edges (as sorted tuples) that are constrained.
     - visualize: Boolean flag to indicate whether to visualize each step.
 
@@ -445,20 +445,20 @@ def find_bad_triangles_constrained(initial_bads, u_idx, vertices, triangles, edg
 
         a, b, c = tri
         # The three points occur in counterclockwise order around the circle
-        if orient(a, b, c, vertices) < 0:
+        if orient(a, b, c, delaunay_node_coords) < 0:
             a, b = b, a
 
         step_number += 1
         if visualize:
-            visualize_bad_triangles_step(vertices, triangles, bad_triangles, current_t_idx, u_idx, step_number)
+            visualize_bad_triangles_step(delaunay_node_coords, triangles, bad_triangles, current_t_idx, u_idx, step_number)
 
-        if in_circle(a, b, c, u_idx, vertices) > 0:
+        if in_circle(a, b, c, u_idx, delaunay_node_coords) > 0:
 
             bad_triangles.add(current_t_idx)
 
 
             # Retrieve neighbors without crossing constrained edges
-            neighbors = get_triangle_neighbors_constrained(current_t_idx, triangles, edge_to_triangle, constrained_edges_set)
+            neighbors = get_triangle_neighbors_constrained(current_t_idx, triangles, delaunay_dic_edge_triangle, constrained_edges_set)
 
 
             for neighbor_idx in neighbors:
@@ -469,17 +469,17 @@ def find_bad_triangles_constrained(initial_bads, u_idx, vertices, triangles, edg
 
     # Final visualization
     if visualize:
-        visualize_bad_triangles_step(vertices, triangles, bad_triangles, None, u_idx, step_number + 1)
+        visualize_bad_triangles_step(delaunay_node_coords, triangles, bad_triangles, None, u_idx, step_number + 1)
 
     return bad_triangles
 
-def order_boundary_vertices_ccw(boundary_edges, vertices):
+def order_boundary_delaunay_node_coords_ccw(boundary_edges, delaunay_node_coords):
     """
-    Orders the vertices from boundary_edges in counter-clockwise (CCW) order.
+    Orders the delaunay_node_coords from boundary_edges in counter-clockwise (CCW) order.
 
     Parameters:
     - boundary_edges: List of tuples representing edges (v1, v2).
-    - vertices: List of vertex coordinates.
+    - delaunay_node_coords: List of vertex coordinates.
 
     Returns:
     - List of vertex indices ordered in CCW.
@@ -492,7 +492,7 @@ def order_boundary_vertices_ccw(boundary_edges, vertices):
         adjacency[v1].append(v2)
         adjacency[v2].append(v1)
 
-    # Step 2: Traverse the boundary to order vertices
+    # Step 2: Traverse the boundary to order delaunay_node_coords
     # Start from a vertex with degree 2 (assuming a simple polygon)
     start_vertex = None
     for v, neighbors in adjacency.items():
@@ -503,43 +503,43 @@ def order_boundary_vertices_ccw(boundary_edges, vertices):
     if start_vertex is None:
         raise ValueError("No suitable starting vertex found. The boundary might not form a simple polygon.")
 
-    ordered_vertices = [start_vertex]
+    ordered_delaunay_node_coords = [start_vertex]
     current = start_vertex
     prev = None
 
     while True:
         neighbors = adjacency[current]
         # Choose the neighbor that's not the previous vertex
-        next_vertices = [v for v in neighbors if v != prev]
-        if not next_vertices:
+        next_delaunay_node_coords = [v for v in neighbors if v != prev]
+        if not next_delaunay_node_coords:
             break  # Completed the loop
-        next_vertex = next_vertices[0]
+        next_vertex = next_delaunay_node_coords[0]
         if next_vertex == start_vertex:
             break  # Completed the loop
-        ordered_vertices.append(next_vertex)
+        ordered_delaunay_node_coords.append(next_vertex)
         prev, current = current, next_vertex
 
     # Step 3: Ensure CCW orientation
-    if not is_ccw(ordered_vertices, vertices):
-        ordered_vertices.reverse()
+    if not is_ccw(ordered_delaunay_node_coords, delaunay_node_coords):
+        ordered_delaunay_node_coords.reverse()
 
-    return ordered_vertices
+    return ordered_delaunay_node_coords
 
-def is_ccw(ordered_vertices, vertices):
+def is_ccw(ordered_delaunay_node_coords, delaunay_node_coords):
     """
-    Determines if the ordered list of vertices is in counter-clockwise order.
+    Determines if the ordered list of delaunay_node_coords is in counter-clockwise order.
 
     Parameters:
-    - ordered_vertices: List of vertex indices ordered around the polygon.
-    - vertices: List of vertex coordinates.
+    - ordered_delaunay_node_coords: List of vertex indices ordered around the polygon.
+    - delaunay_node_coords: List of vertex coordinates.
 
     Returns:
-    - True if the vertices are ordered CCW, False otherwise.
+    - True if the delaunay_node_coords are ordered CCW, False otherwise.
     """
     area = 0.0
-    n = len(ordered_vertices)
+    n = len(ordered_delaunay_node_coords)
     for i in range(n):
-        v_current = vertices[ordered_vertices[i]]
-        v_next = vertices[ordered_vertices[(i + 1) % n]]
+        v_current = delaunay_node_coords[ordered_delaunay_node_coords[i]]
+        v_next = delaunay_node_coords[ordered_delaunay_node_coords[(i + 1) % n]]
         area += (v_current[0] * v_next[1]) - (v_next[0] * v_current[1])
     return area > 0
