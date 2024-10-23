@@ -1,8 +1,8 @@
-from src.operations import add_triangle, delete_triangle
 import numpy as np
-from src.predicates import is_point_inside, compute_centroid
-
 from time import time
+
+from src.predicates import is_point_inside, compute_centroid
+from src.operations import add_triangle, delete_triangle
 
 def generate_edges_from_points(points):
     """
@@ -52,17 +52,17 @@ def convert_delaunay_node_coords_to_ids(delaunay_node_coords, boundary_node_coor
     """
     return [np.where((delaunay_node_coords == point).all(axis=1))[0][0] for point in boundary_node_coords]
 
-def convert_triangle_delaunay_node_coords_idx_to_triangle_idx(triangle_delaunay_node_coords_idx, triangles, delaunay_dic_edge_triangle):
+def convert_triangle_delaunay_node_coords_idx_to_triangle_idx(triangle_delaunay_node_coords_idx, elem_nodes, delaunay_dic_edge_triangle):
     """
     Converts a list of triangle vertex indices to the corresponding triangle index.
 
     Parameters:
     - triangle_delaunay_node_coords_idx: List of three vertex indices defining a triangle.
-    - triangles: List of triangles, where each triangle is a tuple of three vertex indices (v0, v1, v2).
+    - elem_nodes: List of elem_nodes, where each triangle is a tuple of three vertex indices (v0, v1, v2).
     - delaunay_dic_edge_triangle: Dictionary mapping edges to triangle indices.
 
     Returns:
-    - The index of the triangle in the triangles list.
+    - The index of the triangle in the elem_nodes list.
     """
     edge1 = tuple(sorted([triangle_delaunay_node_coords_idx[0], triangle_delaunay_node_coords_idx[1]]))
     edge2 = tuple(sorted([triangle_delaunay_node_coords_idx[1], triangle_delaunay_node_coords_idx[2]]))

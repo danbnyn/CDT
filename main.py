@@ -43,12 +43,16 @@ def main():
 
     seed(18)
 
-    resolution = 200
+    # Resolution for the generationof the fractal boundary 
+    resolution = 200 
     max_iteration = 100
-    min_distance = 0.02
+
+    # Input minimum distance between 2 points in the cloud of points
+    min_distance = 0.02 
 
     verbose = 2
 
+    # Not supporting holes for now
 
     # Generate a polygon boundary 
     boundary_node_coords = generate_mandelbrot_boundary(resolution, max_iteration, verbose=verbose) # Shape : len()
@@ -66,11 +70,11 @@ def main():
     delaunay_node_coords, delaunay_elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems, (triangle_most_recent_idx, most_recent_idx) = delaunay_triangulation(cloud_node_coords, verbose=verbose) # the delaunay_node_coords has the super triangle delaunay_node_coords at the beginning
 
     # delaunay_node_coords = delaunay_node_coords
-    # triangles = elem_nodes (homogene)
+    # elem_nodes = elem_nodes (homogene)
 
     # delaunay_dic_edge_triangle
     # (1,2) indice des noeuds qui composent l'arrete
-    # {(1,2) : (5,8) } (5,8) indince des triangles
+    # {(1,2) : (5,8) } (5,8) indince des elem_nodes
 
     # delaunay_dic_edge_triangle[(1,2)] = (5,8)
 
@@ -100,7 +104,7 @@ def main():
     # Step 4 : Convert mesh to data structure
     node_coords, numb_elems, elem2nodes, p_elem2nodes = convert_to_mesh_format(delaunay_node_coords, delaunay_elem_nodes)
 
-    # Transform to np array ( amettre dans convert mesh)
+    # Transform to np array ( a mettre dans convert mesh)
     node_coords = np.array(node_coords)
     elem2nodes = np.array(elem2nodes)
     p_elem2nodes = np.array(p_elem2nodes)

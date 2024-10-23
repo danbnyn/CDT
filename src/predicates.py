@@ -1,5 +1,4 @@
 import numpy as np
-import math
 
 def orient(a_idx, b_idx, c_idx, delaunay_node_coords):
     """
@@ -124,7 +123,7 @@ def compute_angle(v, common_vertex, delaunay_node_coords):
     """
     x, y = delaunay_node_coords[v]
     cx, cy = delaunay_node_coords[common_vertex]
-    return math.atan2(y - cy, x - cx)
+    return np.atan2(y - cy, x - cx)
 
 def get_circumcircle(a, b, c):
     # Calculate circumcenter and radius
@@ -176,7 +175,7 @@ def distance_point_to_segment(point, seg_start, seg_end):
     
     if dx == 0 and dy == 0:
         # The segment is a single point
-        return math.hypot(px - x1, py - y1)
+        return np.hypot(px - x1, py - y1)
     
     # Parameter t determines the projection of the point onto the segment
     t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
@@ -186,7 +185,7 @@ def distance_point_to_segment(point, seg_start, seg_end):
     nearest_y = y1 + t * dy
     
     # Calculate the Euclidean distance between the point and the closest point on the segment
-    distance = math.hypot(px - nearest_x, py - nearest_y)
+    distance = np.hypot(px - nearest_x, py - nearest_y)
     
     return distance
 
@@ -211,7 +210,7 @@ def is_point_on_edge(u_idx, edge_idx, delaunay_node_coords, epsilon=1e-12):
         return True
     
 def distance(p1, p2):
-    return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+    return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
 def is_valid(point, min_x, min_y, cell_size, grid, grid_width, grid_height, radius):
     cell_x, cell_y = int((point[0] - min_x) / cell_size), int((point[1] - min_y) / cell_size)

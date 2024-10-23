@@ -17,19 +17,19 @@ from src.operations import (
     )
 
 from src.visualize import (
-    visualize_bad_triangles_step, 
+    visualize_bad_elem_nodes_step, 
     visualize_walk_step, 
     visualize_walk_to_point,
-    visualize_bad_triangles,
+    visualize_bad_elem_nodes,
     )
 
-def delete_bad_triangles_and_collect_edges(bad_triangles, triangles, delaunay_dic_edge_triangle, delaunay_node_elems):
+def delete_bad_elem_nodes_and_collect_edges(bad_elem_nodes, elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems):
     """
-    Deletes bad triangles and collects all their edges to form the cavity.
+    Deletes bad elem_nodes and collects all their edges to form the cavity.
 
     Parameters:
-    - bad_triangles: Set of triangle indices that are bad (to be removed).
-    - triangles: List of existing triangles.
+    - bad_elem_nodes: Set of triangle indices that are bad (to be removed).
+    - elem_nodes: List of existing elem_nodes.
     - delaunay_dic_edge_triangle: Dictionary mapping edges to triangle indices or tuples of triangle indices.
     - delaunay_node_elems: Dictionary mapping delaunay_node_coords to triangle indices.
 
@@ -38,8 +38,8 @@ def delete_bad_triangles_and_collect_edges(bad_triangles, triangles, delaunay_di
     """
     cavity_edges = []
 
-    for t_idx in bad_triangles:
-        tri = triangles[t_idx]
+    for t_idx in bad_elem_nodes:
+        tri = elem_nodes[t_idx]
         if tri is None:
             continue  # Triangle already deleted
 
@@ -56,7 +56,7 @@ def delete_bad_triangles_and_collect_edges(bad_triangles, triangles, delaunay_di
         cavity_edges.extend(edges)
 
         # Delete the triangle (assumes delete_triangle handles all necessary updates)
-        delete_triangle(t_idx, triangles, delaunay_dic_edge_triangle, delaunay_node_elems)
+        delete_triangle(t_idx, elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems)
 
     return cavity_edges
 
@@ -80,31 +80,31 @@ def find_boundary_edges(cavity_edges):
 
     return boundary_edges
 
-def find_bad_triangles(initial_bad, u_idx, delaunay_node_coords, triangles, delaunay_dic_edge_triangle ,visualize=False):
+def find_bad_elem_nodes(initial_bad, u_idx, delaunay_node_coords, elem_nodes, delaunay_dic_edge_triangle ,visualize=False):
     """
-    Finds all the bad triangles whose circumcircles contain the new point u_idx.
+    Finds all the bad elem_nodes whose circumcircles contain the new point u_idx.
 
     Parameters:
     - initial_bad: Index of the initial bad triangle.
     - u_idx: Index of the point to be inserted.
     - delaunay_node_coords: List of vertex coordinates.
-    - triangles: List of existing triangles.
+    - elem_nodes: List of existing elem_nodes.
     - delaunay_dic_edge_triangle: Dictionary mapping edges to triangle indices or tuples of triangle indices.
     - visualize: Boolean flag to indicate whether to visualize each step.
 
     Returns:
-    - bad_triangles: Set of indices of bad triangles.
+    - bad_elem_nodes: Set of indices of bad elem_nodes.
     """
-    bad_triangles = set()
+    bad_elem_nodes = set()
     stack = [initial_bad]
     step_number = 0
 
     while stack:
         current_t_idx = stack.pop()
-        if current_t_idx in bad_triangles:
+        if current_t_idx in bad_elem_nodes:
             continue
 
-        tri = triangles[current_t_idx]
+        tri = elem_nodes[current_t_idx]
         if tri is None:
             continue
 
@@ -115,44 +115,44 @@ def find_bad_triangles(initial_bad, u_idx, delaunay_node_coords, triangles, dela
 
         step_number += 1
         # if visualize:
-        #     visualize_bad_triangles_step(delaunay_node_coords, triangles, bad_triangles, current_t_idx, u_idx, step_number)
+        #     visualize_bad_elem_nodes_step(delaunay_node_coords, elem_nodes, bad_elem_nodes, current_t_idx, u_idx, step_number)
 
         if in_circle(a, b, c, u_idx, delaunay_node_coords) > 0:
 
-            bad_triangles.add(current_t_idx)
+            bad_elem_nodes.add(current_t_idx)
 
 
             # Add neighbors to the stack for further exploration
 
-            neighbors = get_triangle_neighbors(current_t_idx, triangles, delaunay_dic_edge_triangle)
+            neighbors = get_triangle_neighbors(current_t_idx, elem_nodes, delaunay_dic_edge_triangle)
             for neighbor_idx in neighbors:
-                if neighbor_idx != -1 and neighbor_idx not in bad_triangles:
+                if neighbor_idx != -1 and neighbor_idx not in bad_elem_nodes:
                     stack.append(neighbor_idx)
 
     # Final visualization
     if visualize:
-        visualize_bad_triangles(delaunay_node_coords, triangles, bad_triangles, u_idx, step_number + 1)
+        visualize_bad_elem_nodes(delaunay_node_coords, elem_nodes, bad_elem_nodes, u_idx, step_number + 1)
 
-    return bad_triangles
+    return bad_elem_nodes
 
-def triangulate_cavity_with_new_point(boundary_edges, u_idx, triangles, delaunay_dic_edge_triangle, delaunay_node_elems):
+def triangulate_cavity_with_new_point(boundary_edges, u_idx, elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems):
     """
     Retriangulates the cavity with the new point u_idx.
 
     Parameters:
     - boundary_edges: List of boundary edges as sorted tuples (a, b).
     - u_idx: Index of the new point to insert.
-    - triangles: List of existing triangles.
+    - elem_nodes: List of existing elem_nodes.
     - delaunay_dic_edge_triangle: Dictionary mapping edges to triangle indices.
     - delaunay_node_elems: Dictionary mapping delaunay_node_coords to triangle indices.
 
     Returns:
-    - None. Updates the triangles and delaunay_dic_edge_triangle structures.
+    - None. Updates the elem_nodes and delaunay_dic_edge_triangle structures.
     """
 
     for edge in boundary_edges:
         a, b = edge
-        new_triangle_idx = add_triangle(a, b, u_idx, triangles, delaunay_dic_edge_triangle, delaunay_node_elems)
+        new_triangle_idx = add_triangle(a, b, u_idx, elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems)
 
     # Check if boundary_edges is empty
     if boundary_edges == []:
@@ -237,7 +237,7 @@ def brio_ordering(delaunay_node_coords):
     
     return ordered_delaunay_node_coords
 
-def walk_to_point(start_idx, target_idx, delaunay_node_coords, triangles, delaunay_dic_edge_triangle, delaunay_node_elems,start_triangle_idx, visualize=False):
+def walk_to_point(start_idx, target_idx, delaunay_node_coords, elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems,start_triangle_idx, visualize=False):
     """
     This function finds the triangle that contains the point specified by target_idx, starting from a triangle containing 
     the point at start_idx. It uses a straight walk algorithm based on orientation tests to traverse the triangulation.
@@ -246,14 +246,14 @@ def walk_to_point(start_idx, target_idx, delaunay_node_coords, triangles, delaun
     (http://graphics.zcu.cz/files/106_REP_2010_Soukal_Roman.pdf)
 
     The initialization step identifies the orientation of the starting triangle and sets up left (l) and right (r) pointers 
-    relative to the point. Then the straight walk traverses triangles until it finds the target point.
+    relative to the point. Then the straight walk traverses elem_nodes until it finds the target point.
 
     Parameters:
     - start_idx: Index of the starting vertex.
     - target_idx: Index of the point to locate.
     - delaunay_node_coords: List of vertex coordinates.
-    - triangles: List of triangles (each triangle is represented as a tuple of 3 vertex indices).
-    - delaunay_dic_edge_triangle: Dictionary mapping edges (tuples of vertex indices) to the indices of one or two triangles.
+    - elem_nodes: List of elem_nodes (each triangle is represented as a tuple of 3 vertex indices).
+    - delaunay_dic_edge_triangle: Dictionary mapping edges (tuples of vertex indices) to the indices of one or two elem_nodes.
     - start_triangle_idx: Index of the triangle containing the starting vertex.
     - visualize: Boolean flag to enable or disable visualization of the walk steps.
 
@@ -263,13 +263,13 @@ def walk_to_point(start_idx, target_idx, delaunay_node_coords, triangles, delaun
     
     current_triangle_idx = start_triangle_idx  # Start with the triangle containing the start point
     step_number = 0  # Initialize step counter for the walk
-    initilization_triangles = [current_triangle_idx]  # Store the triangles visited during initialization
-    main_traversal_triangles = []  # Store the triangles visited during the main traversal
+    initilization_elem_nodes = [current_triangle_idx]  # Store the elem_nodes visited during initialization
+    main_traversal_elem_nodes = []  # Store the elem_nodes visited during the main traversal
 
     if current_triangle_idx == -1:
         raise ValueError("Starting vertex is not part of any triangle in the triangulation.")
 
-    current_triangle = triangles[current_triangle_idx]  # Get the triangle containing the start vertex
+    current_triangle = elem_nodes[current_triangle_idx]  # Get the triangle containing the start vertex
 
     # Get the two other delaunay_node_coords of the current triangle (excluding start_idx)
     other_delaunay_node_coords = [v for v in current_triangle if v != start_idx]
@@ -292,8 +292,8 @@ def walk_to_point(start_idx, target_idx, delaunay_node_coords, triangles, delaun
 
     step_number += 1  # Increment the step counter for initialization
     # if visualize:
-    #     visualize_walk_step(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx,
-    #                         step_number, "Initial setup", initilization_triangles, main_traversal_triangles)
+    #     visualize_walk_step(delaunay_node_coords, elem_nodes, current_triangle_idx, start_idx, target_idx, r_idx, l_idx,
+    #                         step_number, "Initial setup", initilization_elem_nodes, main_traversal_elem_nodes)
 
     # Check if the target point is already inside the current triangle
     if in_triangle(r_idx, start_idx, l_idx, target_idx, delaunay_node_coords):
@@ -312,12 +312,12 @@ def walk_to_point(start_idx, target_idx, delaunay_node_coords, triangles, delaun
                 raise ValueError("Reached a boundary while traversing; point may be outside triangulation.")
             
             current_triangle_idx = neighbor_triangle_idx  # Move to the neighbor triangle
-            initilization_triangles.append(current_triangle_idx)
-            current_triangle = triangles[current_triangle_idx]
+            initilization_elem_nodes.append(current_triangle_idx)
+            current_triangle = elem_nodes[current_triangle_idx]
             l_idx = next(v for v in current_triangle if v != start_idx and v != r_idx)  # Update the left vertex
             if visualize:
-                visualize_walk_step(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
-                                    step_number, "Rotating 1", initilization_triangles, main_traversal_triangles)
+                visualize_walk_step(delaunay_node_coords, elem_nodes, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
+                                    step_number, "Rotating 1", initilization_elem_nodes, main_traversal_elem_nodes)
     else:
         # The opposite direction (left side)
         cond = True
@@ -330,17 +330,17 @@ def walk_to_point(start_idx, target_idx, delaunay_node_coords, triangles, delaun
                 raise ValueError("Reached a boundary while traversing; point may be outside triangulation.")
             
             current_triangle_idx = neighbor_triangle_idx  # Move to the neighbor triangle
-            initilization_triangles.append(current_triangle_idx)
-            current_triangle = triangles[current_triangle_idx]
+            initilization_elem_nodes.append(current_triangle_idx)
+            current_triangle = elem_nodes[current_triangle_idx]
             r_idx = next(v for v in current_triangle if v != start_idx and v != l_idx)  # Update the right vertex
             
             cond = orient(start_idx, target_idx, r_idx, delaunay_node_coords) <= 0  # Continue as long as the condition holds
             if visualize:
-                visualize_walk_step(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
-                                    step_number, "Rotating 2", initilization_triangles, main_traversal_triangles)
+                visualize_walk_step(delaunay_node_coords, elem_nodes, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
+                                    step_number, "Rotating 2", initilization_elem_nodes, main_traversal_elem_nodes)
 
-    initilization_triangles.pop()  # Remove the last triangle from initialization list
-    main_traversal_triangles = [current_triangle_idx]  # Start tracking the main traversal path
+    initilization_elem_nodes.pop()  # Remove the last triangle from initialization list
+    main_traversal_elem_nodes = [current_triangle_idx]  # Start tracking the main traversal path
 
     # Switch left and right pointers for the main traversal
     l_idx, r_idx = r_idx, l_idx
@@ -357,15 +357,15 @@ def walk_to_point(start_idx, target_idx, delaunay_node_coords, triangles, delaun
             # If no neighbor is found, check if the target point lies inside the current triangle
             if in_triangle(r_idx, start_idx, l_idx, target_idx, delaunay_node_coords):
                 if visualize:
-                    visualize_walk_step(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
-                                        step_number, "Main path finding", initilization_triangles, main_traversal_triangles)
+                    visualize_walk_step(delaunay_node_coords, elem_nodes, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
+                                        step_number, "Main path finding", initilization_elem_nodes, main_traversal_elem_nodes)
                 return current_triangle_idx
             else:
                 raise ValueError("Reached a boundary while traversing; point may be outside triangulation.")
         
         current_triangle_idx = neighbor_triangle_idx  # Move to the next triangle
-        main_traversal_triangles.append(current_triangle_idx)
-        current_triangle = triangles[current_triangle_idx]
+        main_traversal_elem_nodes.append(current_triangle_idx)
+        current_triangle = elem_nodes[current_triangle_idx]
         s_idx = next(v for v in current_triangle if v != r_idx and v != l_idx)  # Find the remaining vertex
 
         # Update the right or left pointer based on the orientation
@@ -376,18 +376,18 @@ def walk_to_point(start_idx, target_idx, delaunay_node_coords, triangles, delaun
 
         if in_triangle(r_idx, start_idx, l_idx, target_idx, delaunay_node_coords):
             if visualize:
-                visualize_walk_to_point(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
-                            step_number, "Main path finding", initilization_triangles, main_traversal_triangles)
+                visualize_walk_to_point(delaunay_node_coords, elem_nodes, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
+                            step_number, "Main path finding", initilization_elem_nodes, main_traversal_elem_nodes)
 
             return current_triangle_idx
         # if visualize:
-        #     visualize_walk_step(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
-        #                         step_number, "Main path finding", initilization_triangles, main_traversal_triangles)
+        #     visualize_walk_step(delaunay_node_coords, elem_nodes, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
+        #                         step_number, "Main path finding", initilization_elem_nodes, main_traversal_elem_nodes)
 
     
     if visualize:
-        visualize_walk_to_point(delaunay_node_coords, triangles, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
-                            step_number, "Main path finding", initilization_triangles, main_traversal_triangles)
+        visualize_walk_to_point(delaunay_node_coords, elem_nodes, current_triangle_idx, start_idx, target_idx, r_idx, l_idx, 
+                            step_number, "Main path finding", initilization_elem_nodes, main_traversal_elem_nodes)
 
 
     return current_triangle_idx  # Return the index of the triangle containing the target point

@@ -1,9 +1,7 @@
 import numpy as np
 import math
-import random
-from shapely.geometry import Polygon, Point, MultiPolygon # Enable precise geometric operations
+from shapely.geometry import Polygon, Point # Enable precise geometric operations
 from skimage import measure
-from scipy.spatial import cKDTree
 from time import time
 
 from src.utils import log
@@ -97,7 +95,7 @@ def generate_mandelbrot_boundary(
     
     # Extract contours at the level max_iterations - 1
     contour_start_time = time()
-    contours = measure.find_contours(iteration_array, level=max_iterations - 1)
+    contours = measure.find_contours(iteration_array, level=max_iterations - 1) # Allows us to find all the components of the boundary formed by the mandelbrot set
     contour_time = time() - contour_start_time
     log(f"Extracted contours in {contour_time:.4f} seconds.", verbose, level=1)
     
@@ -105,7 +103,7 @@ def generate_mandelbrot_boundary(
         raise ValueError("No contours found. Try increasing 'max_iterations' or adjusting the fractal parameters.")
     
     # Select the longest contour assuming it's the main boundary
-    boundary_contour = max(contours, key=lambda x: len(x))
+    boundary_contour = max(contours, key=lambda x: len(x)) # Allows us to select the longest boundary from all the components of the mandelbrot set
     log(f"Selected the longest contour with {boundary_contour.shape[0]} points.", verbose, level=2)
     
     # Map contour coordinates to the complex plane
@@ -119,7 +117,6 @@ def generate_mandelbrot_boundary(
     log(f"Generated Mandelbrot boundary polygon with {boundary_polygon.shape[0]} points in {total_time:.4f} seconds.", verbose, level=1)
     
     return boundary_polygon
-
 
 # ---------- Generate Generic Non Convex Polygon ---------- #
 
@@ -150,7 +147,6 @@ def generate_non_convex_boundary(num_points=20, radius=1.0, noise_factor=0.3):
     
     return boundary_node_coords
 
-
 # ------------------------------------ Initialization Functions ------------------------------------ #
 
 def initialize_delaunay_node_elems(num_delaunay_node_coords):
@@ -165,13 +161,13 @@ def initialize_delaunay_node_elems(num_delaunay_node_coords):
     """
     return [[] for _ in range(num_delaunay_node_coords)]
 
-def initialize_triangulation(cloud_node_coords, triangles, delaunay_dic_edge_triangle, delaunay_node_elems):
+def initialize_triangulation(cloud_node_coords, elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems):
     """
     Initializes the triangulation with four affinely independent delaunay_node_coords.
     
     Parameters:
     - cloud_node_coords: List of points (tuples of (x, y)) to triangulate.
-    - triangles: List to store triangles.
+    - elem_nodes: List to store elem_nodes.
     - delaunay_dic_edge_triangle: Dictionary mapping edges to triangle indices.
     - delaunay_node_elems: List of lists, where each sublist contains triangle indices.
     
@@ -201,14 +197,12 @@ def initialize_triangulation(cloud_node_coords, triangles, delaunay_dic_edge_tri
     
 
     # Add the super-triangle 
-    add_triangle(0, 1, 2, triangles, delaunay_dic_edge_triangle, delaunay_node_elems)
+    add_triangle(0, 1, 2, elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems)
 
     # Initialize the delaunay_node_coords with super-triangle delaunay_node_coords
     return np.array([super_v0, super_v1, super_v2])
 
-
-
-# ---------- Main Functions ---------- #
+# ---------- Generate Boundary Functions ---------- #
 
 def generate_boundary_node_coords(polygon, min_distance, verbose=1):
     """
@@ -277,57 +271,60 @@ def generate_point_around(point, r):
     r = np.random.uniform(r, 2 * r)
     return (point[0] + r * math.cos(theta), point[1] + r * math.sin(theta))
 
-def compute_centroid(delaunay_node_coords):
-    """
-    Compute the centroid of a polygon.
-    delaunay_node_coords: list of (x, y) tuples
-    """
-    signed_area = 0
-    Cx = 0
-    Cy = 0
-    n = len(delaunay_node_coords)
-    for i in range(n):
-        x0, y0 = delaunay_node_coords[i]
-        x1, y1 = delaunay_node_coords[(i + 1) % n]
-        A = x0 * y1 - x1 * y0
-        signed_area += A
-        Cx += (x0 + x1) * A
-        Cy += (y0 + y1) * A
-    signed_area *= 0.5
-    if signed_area == 0:
-        raise ValueError("Polygon area is zero, invalid polygon.")
-    Cx /= (6 * signed_area)
-    Cy /= (6 * signed_area)
-    return (Cx, Cy)
+# def compute_centroid(delaunay_node_coords):
+#     """
+#     Compute the centroid of a polygon.
+#     delaunay_node_coords: list of (x, y) tuples
+#     """
+#     signed_area = 0
+#     Cx = 0
+#     Cy = 0
+#     n = len(delaunay_node_coords)
+#     for i in range(n):
+#         x0, y0 = delaunay_node_coords[i]
+#         x1, y1 = delaunay_node_coords[(i + 1) % n]
+#         A = x0 * y1 - x1 * y0
+#         signed_area += A
+#         Cx += (x0 + x1) * A
+#         Cy += (y0 + y1) * A
+#     signed_area *= 0.5
+#     if signed_area == 0:
+#         raise ValueError("Polygon area is zero, invalid polygon.")
+#     Cx /= (6 * signed_area)
+#     Cy /= (6 * signed_area)
+#     return (Cx, Cy)
 
-def scale_polygon(delaunay_node_coords, d):
-    """
-    Scale a polygon by moving each vertex outward by distance d.
-    delaunay_node_coords: list of (x, y) tuples in CCW order
-    Sadly this only work on convex polygons.
-    d: offset distance
-    Returns a new list of scaled delaunay_node_coords.
-    """
-    centroid = compute_centroid(delaunay_node_coords)
-    scaled_delaunay_node_coords = []
-    for (x, y) in delaunay_node_coords:
-        # Direction from centroid to vertex
-        dx = x - centroid[0]
-        dy = y - centroid[1]
-        length = math.hypot(dx, dy)
-        if length == 0:
-            raise ValueError("A vertex coincides with the centroid.")
-        # Unit direction vector
-        ux = dx / length
-        uy = dy / length
-        # Offset vertex
-        new_x = x + ux * d
-        new_y = y + uy * d
-        scaled_delaunay_node_coords.append((new_x, new_y))
-    return scaled_delaunay_node_coords
+# def scale_polygon(delaunay_node_coords, d):
+#     """
+#     Scale a polygon by moving each vertex outward by distance d.
+#     delaunay_node_coords: list of (x, y) tuples in CCW order
+#     Sadly this only work on convex polygons.
+#     d: offset distance
+#     Returns a new list of scaled delaunay_node_coords.
+#     """
+#     centroid = compute_centroid(delaunay_node_coords)
+#     scaled_delaunay_node_coords = []
+#     for (x, y) in delaunay_node_coords:
+#         # Direction from centroid to vertex
+#         dx = x - centroid[0]
+#         dy = y - centroid[1]
+#         length = math.hypot(dx, dy)
+#         if length == 0:
+#             raise ValueError("A vertex coincides with the centroid.")
+#         # Unit direction vector
+#         ux = dx / length
+#         uy = dy / length
+#         # Offset vertex
+#         new_x = x + ux * d
+#         new_y = y + uy * d
+#         scaled_delaunay_node_coords.append((new_x, new_y))
+#     return scaled_delaunay_node_coords
 
 def offset_polygon_shapely(delaunay_node_coords, d):
     """
+    Parameters:
+
+
     Offset a polygon using Shapely's buffer method.
     Positive d offsets outward, negative d offsets inward.
     Returns a list of polygons, each represented as a list of (x, y) tuples.
@@ -451,6 +448,11 @@ def poisson_disk_sampling(polygon_outer, polygons_holes, radius, k=50, verbose=1
     
     return filtered_points
 
+def heterogen_disk_sampling():
+    pass
+
+# ---------- Main Functions ---------- #
+
 def generate_cloud(polygon, min_distance, verbose=1):
     """
     Generate a point cloud within a polygon with a specified density and margin.
@@ -511,7 +513,6 @@ def generate_cloud(polygon, min_distance, verbose=1):
     log(f"Total points in cloud: {combined_points.shape[0]}", verbose, level=1)
     
     return combined_points, boundary_node_coords, interior_node_coords
-
 
 def remove_duplicate_points(points):
     """
