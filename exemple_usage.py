@@ -1,5 +1,6 @@
 from random import seed
 import matplotlib.pyplot as plt
+import numpy as np
 
 from src.delaunay_triangulation import (
     plot_triangulation, 
@@ -21,7 +22,6 @@ from src.delaunay_triangulation import (
     clean_mesh,
     convert_to_mesh_format,
     apply_rcm,
-    build_adjacency_list
 )
 
 def main():
@@ -49,7 +49,7 @@ def main():
     # #reverse the order of the boundary points to be ccw
     boundary_node_coords = boundary_node_coords[::-1]
 
-    plot_points(cloud_node_coords, title="Cloud Points based on Mandelbrot Boundary with resolution " + str(resolution) + " and min distance " + str(min_distance))
+    # plot_points(cloud_node_coords, title="Cloud Points based on Mandelbrot Boundary with resolution " + str(resolution) + " and min distance " + str(min_distance))
 
     # Step 1 : Perform the DT on the convex hull to generate the bulk of the mesh
     delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes, (triangle_most_recent_idx, most_recent_idx) = delaunay_triangulation(cloud_node_coords, verbose=verbose) # the delaunay_node_coords has the super triangle delaunay_node_coords at the beginning
@@ -89,30 +89,26 @@ def main():
 
     delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes = constrained_delaunay_triangulation(boundary_constrained_edges, delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes, verbose=verbose)
 
-    plot_triangulation(delaunay_node_coords, delaunay_elem_nodes, title="Delaunay Triangulation based on Cloud Points")
+    # plot_triangulation(delaunay_node_coords, delaunay_elem_nodes, title="Delaunay Triangulation based on Cloud Points")
     
     # Step 3 : Clean the mesh
     super_delaunay_node_coords = [0, 1, 2]
-    delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems = clean_mesh(delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes, super_delaunay_node_coords, boundary_constrained_edges, verbose = verbose)
+    delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes = clean_mesh(delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes, super_delaunay_node_coords, boundary_constrained_edges, verbose = verbose)
 
     # # clean_dt
 
-    plot_triangulation(delaunay_node_coords, delaunay_elem_nodes, title="Constrained Delaunay Triangulation based on Boundary Points")
+    # plot_triangulation(delaunay_node_coords, delaunay_elem_nodes, title="Constrained Delaunay Triangulation based on Boundary Points")
 
     # # Step 4 : Convert mesh to data structure
-    # node_coords, numb_elems, elem2nodes, p_elem2nodes = convert_to_mesh_format(delaunay_node_coords, delaunay_elem_nodes)
+    node_coords, numb_elems, elem2nodes, p_elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes = convert_to_mesh_format(delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes)
 
-    # # Transform to np array ( a mettre dans convert mesh)
-    # node_coords = np.array(node_coords)
-    # elem2nodes = np.array(elem2nodes)
-    # p_elem2nodes = np.array(p_elem2nodes)
 
-    # plot_adjancy_matrix(node_coords, elem2nodes, p_elem2nodes, title="Adjacency Matrix of the Mesh")
+    plot_adjancy_matrix(node_coords, elem2nodes, p_elem2nodes, title="Adjacency Matrix of the Mesh")
 
-    # # Step 5 : Apply RCM
-    # new_node_coords, new_elem2nodes = apply_rcm(node_coords, elem2nodes, p_elem2nodes)
+    # Step 5 : Apply RCM
+    node_coords, elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes = apply_rcm(node_coords, elem2nodes, p_elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes)
 
-    # plot_adjancy_matrix(new_node_coords, new_elem2nodes, p_elem2nodes, title="Adjacency Matrix of the Mesh after RCM")
+    plot_adjancy_matrix(node_coords, elem2nodes, p_elem2nodes, title="Adjacency Matrix of the Mesh after RCM")
 
     plt.show()
 

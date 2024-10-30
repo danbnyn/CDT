@@ -2,7 +2,7 @@ from time import time
 from collections import deque  
 import numpy as np
 from collections import defaultdict
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Set
 
 from .operations import (
     delete_triangle
@@ -28,12 +28,13 @@ def clean_mesh(
     verbose: int = 1
 ) -> Tuple[np.ndarray, List[Tuple[int, int, int]], List[List[int]]]:
     """
-    This function cleans the mesh by performing the following steps:
-    1. **Remove Super-Triangle Elements**: Identifies and removes elements (triangles) that are connected to the super-triangle nodes.
-    2. **Filter Exterior Elements**: Removes elements outside the specified polygon outer boundary using the `filter_exterior_elem_nodes` function.
-    3. **Remove Super-Triangle Nodes**: Deletes the super-triangle nodes from the node coordinates.
-    4. **Reindex Elements**: Reindexes the vertex IDs in the elements list to reflect the removal of super-triangle nodes.
-    5. **Rebuild Node-to-Elements Mapping**: Updates the `node_elems` list to reflect the updated elements and node coordinates.
+    Cleans the mesh by performing the following steps:
+    1. Remove Super-Triangle Elements
+    2. Filter Exterior Elements
+    3. Remove Super-Triangle Nodes
+    4. Reindex Elements
+    5. Rebuild Node-to-Elements Mapping
+    6. Rebuild Node-to-Nodes Mapping
 
     Parameters:
     - node_coords (np.ndarray): Array of node coordinates including the original point cloud and super-triangle node coordinates.
@@ -45,9 +46,10 @@ def clean_mesh(
     - verbose (int): Verbosity level for logging (0: silent, 1: basic, 2: detailed). Default is 1.
 
     Returns:
-    - node_coords (np.ndarray): Updated array of node coordinates after removing super-triangle nodes.
-    - new_elem_nodes (List[Tuple[int, int, int]]): Updated list of elements (triangles) after cleaning, with reindexed vertex IDs.
-    - node_elems (List[List[int]]): Updated list of lists, where each sublist contains the triangle indices connected to a node.
+    - Tuple containing:
+        - node_coords (np.ndarray): Updated array of node coordinates after removing super-triangle nodes.
+        - new_elem_nodes (List[Tuple[int, int, int]]): Updated list of elements (triangles) after cleaning, with reindexed vertex IDs.
+        - node_elems (List[List[int]]): Updated list of lists, where each sublist contains the triangle indices connected to a node.
     """
 
     start_time = time()
@@ -68,17 +70,17 @@ def clean_mesh(
     step_time = time() - step_start
     log(f"Step 1: Removed super-triangle elem_nodes in {step_time:.4f} seconds.", verbose, level=1)
     if verbose >=2:
-        log(f"Total elem_nodes after removal: {len(elem_nodes)}", verbose, level=2)
+        log(f"Total elem_nodes after removal: {len([tri for tri in elem_nodes if tri is not None])}", verbose, level=2)
 
     plot_triangulation(node_coords, elem_nodes, title="Triangulation after removing super-triangle elem_nodes")
-
+    
     # Step 2: Remove the elem_nodes exterior to the boundary
     step_start = time()
     exterior_removed = filter_exterior_elem_nodes(elem_nodes, node_elems, node_nodes, polygon_outer_edges)
     step_time = time() - step_start
     log(f"Step 2: Removed exterior elem_nodes in {step_time:.4f} seconds.", verbose, level=1)
     if verbose >=2:
-        log(f"Total elem_nodes after removing exterior: {len(elem_nodes)}", verbose, level=2)
+        log(f"Total elem_nodes after removing exterior: {len([tri for tri in elem_nodes if tri is not None])}", verbose, level=2)
 
     # Step 3: Remove the super-triangle node_coords
     step_start = time()
@@ -95,6 +97,7 @@ def clean_mesh(
     for tri in elem_nodes:
         if tri is not None:
             # Reindex vertex IDs by subtracting the number of removed super-triangle node_coords
+            # This assumes that super_node_coords were at the end and removed in order
             new_tri = tuple([v - num_removed for v in tri])
             new_elem_nodes.append(new_tri)
     
@@ -117,12 +120,35 @@ def clean_mesh(
     if verbose >=2:
         log(f"Total vertex-to-triangle mappings: {len(node_elems)}", verbose, level=2)
     
-
-
+    # Step 6: Rebuild the node_nodes list
+    step_start = time()
+    log(f"Step 6: Rebuilding node_nodes...", verbose, level=1)
+    
+    # Initialize new_node_nodes as list of sets to avoid duplicates
+    new_node_nodes = [set() for _ in range(len(node_coords))]
+    
+    for tri in new_elem_nodes:
+        u, v, w = tri
+        new_node_nodes[u].update([v, w])
+        new_node_nodes[v].update([u, w])
+        new_node_nodes[w].update([u, v])
+    
+    # Convert sets to sorted lists
+    new_node_nodes_sorted = [sorted(list(neighbors)) for neighbors in new_node_nodes]
+    
+    # Clear and update node_nodes
+    node_nodes.clear()
+    node_nodes.extend(new_node_nodes_sorted)
+    
+    step_time = time() - step_start
+    log(f"Step 6: Rebuilt node_nodes in {step_time:.4f} seconds.", verbose, level=1)
+    if verbose >=2:
+        log(f"Total node_nodes after rebuilding: {len(node_nodes)}", verbose, level=2)
+    
     total_time = time() - start_time
     log(f"Mesh cleaning completed in {total_time:.4f} seconds.", verbose, level=1)
     
-    return node_coords, new_elem_nodes, node_elems
+    return node_coords, new_elem_nodes, node_elems, node_nodes
 
 def get_edge(
         v1: int,
@@ -232,78 +258,152 @@ def filter_exterior_elem_nodes(
                     edge_queue.append(te)
 
 
-############################################### To be continued ########################################################
-
-
-def convert_to_mesh_format(node_coords, elem_nodes):
+def convert_to_mesh_format(
+    node_coords: List[Tuple[float, float]], 
+    elem_nodes: List[Tuple[int, int, int]], 
+    node_elems: List[List[int]], 
+    node_nodes: List[List[int]]
+) -> Tuple[
+    List[List[float]], int, List[int], List[int], List[int], List[int], List[int], List[int]
+]:
     """
-    Convert the data structures to a more efficient format for ulterior usage.
+    This function takes the mesh data structures and converts them into a format consisting of flat lists and pointers,
+    making them more efficient for traversal, querying, and memory usage in subsequent operations.
 
     Parameters:
-    - node_coords: List of node_coords coordinates.
-    - elem_nodes: List of elem_nodes, where each triangle is a tuple of three vertex indices (v0, v1, v2).
+    - node_coords (List[Tuple[float, float]]): List of node coordinates as (x, y) tuples.
+    - elem_nodes (List[Tuple[int, int, int]]): List of triangles, each represented as a tuple of three vertex indices (v0, v1, v2).
+    - node_elems (List[List[int]]): List of lists, where each sublist contains the indices of triangles connected to a node.
+    - node_nodes (List[List[int]]): List of lists, where each sublist contains the indices of nodes connected to a node.
 
     Returns:
-    - node_coord: List of node_coords coordinates.
-    - numb_elem: Number of elements in the mesh.
-    - elem2node: List of vertex indices
-    - p_elem2node: Pointer for the elem2node list, indicating the start of each element of the mesh.
-
+    - Tuple containing:
+        - node_coords: List of node coordinates.
+        - numb_elems: Number of elements in the mesh.
+        - elem2nodes: Flat list of vertex indices for each triangle.
+        - p_elem2nodes: Pointer list indicating the start index of each triangle in `elem2nodes`.
+        - node2elems: Flat list of triangle indices connected to each node.
+        - p_node2elems: Pointer list indicating the start index of each node's elements in `node2elems`.
+        - node2nodes: Flat list of node indices connected to each node.
+        - p_node2nodes: Pointer list indicating the start index of each node's neighbors in `node2nodes`.
     """
+    # 1. Copy the coordinates
+    node_coords = [[x, y] for x, y in node_coords]
 
-    node_coord = [ [node_coords[i][0], node_coords[i][1]] for i in range(len(node_coords))]
-    elem2node = []
-    p_elem2node = [0]
-
+    # 2. Flatten the elem_nodes and create the pointer list p_elem2nodes
+    elem2nodes = []
+    p_elem2nodes = [0]
+    current_p_elem2node = 0
     for tri in elem_nodes:
-        elem2node.extend(tri)
-        p_elem2node.append(p_elem2node[-1] + 3)
+        elem2nodes.extend(tri)
+        p_elem2nodes.append(current_p_elem2node + len(tri))
+        current_p_elem2node += len(tri)
+
+    numb_elems = len(elem_nodes)
+
+    # 3. Flatten the node_elems and create the pointer list p_node2elems
+    node2elems = []
+    p_node2elems = [0]
+    current_p_node2elems = 0
+    for elems in node_elems:
+        node2elems.extend(elems)
+        p_node2elems.append(current_p_node2elems + len(elems))
+        current_p_node2elems += len(elems)
+
+    # 4. Flatten the node_nodes and create the pointer list p_node2nodes
+    node2nodes = []
+    p_node2nodes = [0]
+    current_p_node2nodes = 0
+    for nodes in node_nodes:
+        node2nodes.extend(nodes)
+        p_node2nodes.append(current_p_node2nodes + len(nodes))
+        current_p_node2nodes += len(nodes)
+
+    return node_coords, numb_elems, elem2nodes, p_elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes
 
 
-    numb_elem = len(elem_nodes)
+# ----------------------- Reverse Cuthill–McKee Algorithm ----------------------- #
 
+def build_adjacency_map(
+    elem2nodes: List[int], 
+    p_elem2nodes: List[int]
+) -> Dict[int, Set[int]]:
+    """
+    Builds an adjacency map from the flat `elem2nodes` list and its pointer list `p_elem2nodes`.
+    
+    Description:
+    This function constructs an adjacency dictionary where each node is mapped to a set of its adjacent nodes 
+    by iterating through each triangle defined in the mesh. The adjacency map is essential for graph-based 
+    algorithms like the Reverse Cuthill–McKee (RCM) algorithm.
+    
+    Parameters:
+    - elem2nodes (List[int]): Flat list of vertex indices for each triangle.
+    - p_elem2nodes (List[int]): Pointer list indicating the start index of each triangle in `elem2nodes`.
+    
+    Returns:
+    - Dict[int, Set[int]]: A dictionary mapping each vertex index to a set of its adjacent vertex indices.
+    """
+    adjacency: Dict[int, Set[int]] = defaultdict(set)
+    numb_elems = len(p_elem2nodes) - 1  # Number of triangles
 
-    return node_coord, numb_elem, elem2node, p_elem2node
+    for elem_idx in range(numb_elems):
+        start = p_elem2nodes[elem_idx]
+        end = p_elem2nodes[elem_idx + 1]
+        triangle = elem2nodes[start:end]
 
-# ----------------- Optimization of the data structure ----------------- #
+        if len(triangle) != 3:
+            continue  # Skip invalid triangles
 
-# ----------------------- Reverse Cuthill–McKee Algorithm -----------------------
+        u, v, w = triangle
+        # Add edges to the adjacency map
+        adjacency[u].update([v, w])
+        adjacency[v].update([u, w])
+        adjacency[w].update([u, v])
 
-def build_adjacency_list(elem2node, p_elem2node):
-    """Build adjacency list from elem2node and p_elem2node."""
-    adjacency = defaultdict(set)
-    for elem_idx in range(len(p_elem2node) - 1):
-        start = p_elem2node[elem_idx]
-        end = p_elem2node[elem_idx + 1]
-        triangle = elem2node[start:end]
-        for i in range(3):
-            for j in range(i + 1, 3):
-                adjacency[triangle[i]].add(triangle[j])
-                adjacency[triangle[j]].add(triangle[i])
     return adjacency
 
-def reverse_cuthill_mckee(adjacency, n_nodes):
-    """Implement the Reverse Cuthill–McKee algorithm."""
-    visited = [False] * n_nodes
-    permutation = []
-
+def reverse_cuthill_mckee(
+    adjacency: Dict[int, Set[int]], 
+    n_nodes: int
+) -> List[int]:
+    """
+    Implements the Reverse Cuthill–McKee (RCM) algorithm to reorder nodes for reduced bandwidth.
+    
+    Description:
+    The RCM algorithm reorders the nodes of a graph to reduce the bandwidth of the adjacency matrix. 
+    This is particularly useful for optimizing memory access patterns and improving the performance 
+    of sparse matrix operations.
+    
+    Parameters:
+    - adjacency (Dict[int, Set[int]]): Adjacency map where each key is a node index and the value is a set of adjacent node indices.
+    - n_nodes (int): Total number of nodes in the graph.
+    
+    Returns:
+    - List[int]: A list where the index is the old node index and the value is the new node index.
+    """
+    visited: List[bool] = [False] * n_nodes
+    permutation: List[int] = []
+    
     # Find the node with the minimum degree to start
-    degrees = [len(adjacency[i]) for i in range(n_nodes)]
-    start_node = degrees.index(min(degrees))
-
-    queue = deque()
+    degrees: List[int] = [len(adjacency.get(i, [])) for i in range(n_nodes)]
+    try:
+        start_node: int = degrees.index(min(degrees))
+    except ValueError:
+        start_node = 0  # Default to node 0 if no nodes exist
+    
+    queue: deque = deque()
     queue.append(start_node)
     visited[start_node] = True
-
+    
     while queue:
         node = queue.popleft()
         permutation.append(node)
-        neighbors = sorted(adjacency[node], key=lambda x: len(adjacency[x]))
-        for neighbor in neighbors:
+        neighbors_sorted = sorted(adjacency.get(node, []), key=lambda x: len(adjacency.get(x, [])))
+        for neighbor in neighbors_sorted:
             if not visited[neighbor]:
                 visited[neighbor] = True
                 queue.append(neighbor)
-
+    
     # Check for disconnected graph
     for node in range(n_nodes):
         if not visited[node]:
@@ -312,35 +412,113 @@ def reverse_cuthill_mckee(adjacency, n_nodes):
             while queue:
                 current = queue.popleft()
                 permutation.append(current)
-                neighbors = sorted(adjacency[current], key=lambda x: len(adjacency[x]))
-                for neighbor in neighbors:
+                neighbors_sorted = sorted(adjacency.get(current, []), key=lambda x: len(adjacency.get(x, [])))
+                for neighbor in neighbors_sorted:
                     if not visited[neighbor]:
                         visited[neighbor] = True
                         queue.append(neighbor)
-
+    
     # Reverse the permutation for RCM
     permutation = permutation[::-1]
+    
     # Create a mapping from old indices to new indices
-    mapping = {old_idx: new_idx for new_idx, old_idx in enumerate(permutation)}
+    mapping = [0] * n_nodes
+    for new_idx, old_idx in enumerate(permutation):
+        mapping[old_idx] = new_idx
+
     return mapping
 
-def apply_rcm(node_coord, elem2node, p_elem2node):
-    """Apply the Reverse Cuthill–McKee algorithm to reorder nodes."""
-
-    n_nodes = len(node_coord)
-
-    adjacency = build_adjacency_list(elem2node, p_elem2node)
-    mapping = reverse_cuthill_mckee(adjacency, n_nodes)
-
-    # Create new node_coord array
-    new_node_coord = np.zeros_like(node_coord)
-    for old_idx, new_idx in mapping.items():
-        new_node_coord[new_idx] = node_coord[old_idx]
-
-    # Create a list to map old to new indices
-    old_to_new = mapping
-    # Update elem2node
-    new_elem2node = np.array([old_to_new[old_idx] for old_idx in elem2node], dtype='int64')
-
-    return new_node_coord, new_elem2node
-
+def apply_rcm(
+    node_coords: List[List[float]], 
+    elem2nodes: List[int], 
+    p_elem2nodes: List[int],
+    node2elems: List[int],
+    p_node2elems: List[int],
+    node2nodes: List[int],
+    p_node2nodes: List[int]
+) -> Tuple[
+    List[List[float]], 
+    List[int], 
+    List[int], 
+    List[int], 
+    List[int], 
+    List[int], 
+    List[int]
+]:
+    """
+    Applies the Reverse Cuthill–McKee (RCM) algorithm to reorder nodes and updates all related data structures.
+    
+    Description:
+    This function reorders the nodes of the mesh using the RCM algorithm to reduce the bandwidth of the adjacency matrix.
+    It updates the node coordinates, element-to-node mappings, and node-to-elements/nodes mappings based on the new ordering.
+    
+    Parameters:
+    - node_coords (List[List[float]]): List of node coordinates `[x, y]`.
+    - elem2nodes (List[int]): Flat list of vertex indices for each triangle.
+    - p_elem2nodes (List[int]): Pointer list indicating the start index of each triangle in `elem2nodes`.
+    - node2elems (List[int]): Flat list of triangle indices connected to each node.
+    - p_node2elems (List[int]): Pointer list indicating the start index of each node's triangles in `node2elems`.
+    - node2nodes (List[int]): Flat list of node indices connected to each node.
+    - p_node2nodes (List[int]): Pointer list indicating the start index of each node's neighbors in `node2nodes`.
+    
+    Returns:
+    - Tuple containing:
+        - new_node_coords (List[List[float]]): Reordered list of node coordinates.
+        - new_elem2nodes (List[int]): Reordered flat list of vertex indices for each triangle.
+        - new_node2elems (List[int]): Reordered flat list of triangle indices connected to each node.
+        - new_p_node2elems (List[int]): Reordered pointer list for `node2elems`.
+        - new_node2nodes (List[int]): Reordered flat list of node indices connected to each node.
+        - new_p_node2nodes (List[int]): Reordered pointer list for `node2nodes`.
+    """
+    n_nodes: int = len(node_coords)
+    
+    # Step 1: Build adjacency map from elem2nodes and p_elem2nodes
+    adjacency: Dict[int, Set[int]] = build_adjacency_map(elem2nodes, p_elem2nodes)
+    
+    # Step 2: Get RCM mapping (old_idx -> new_idx)
+    mapping: List[int] = reverse_cuthill_mckee(adjacency, n_nodes)
+    
+    # Step 3: Create inverse mapping: new_idx -> old_idx
+    inverse_mapping: List[int] = [0] * n_nodes
+    for old_idx, new_idx in enumerate(mapping):
+        inverse_mapping[new_idx] = old_idx
+    
+    # Step 4: Reorder node_coords based on mapping
+    new_node_coords: List[List[float]] = [ [0.0, 0.0] for _ in range(n_nodes) ]
+    for new_idx, old_idx in enumerate(inverse_mapping):
+        new_node_coords[new_idx] = node_coords[old_idx]
+    
+    # Step 5: Reorder elem2nodes based on mapping
+    new_elem2nodes: List[int] = [ mapping[old_idx] for old_idx in elem2nodes ]
+    
+    # Step 6: Reorder node2elems and p_node2elems based on mapping
+    new_node2elems: List[int] = []
+    new_p_node2elems: List[int] = [0]
+    for new_node_idx in range(n_nodes):
+        old_node_idx = inverse_mapping[new_node_idx]
+        old_start = p_node2elems[old_node_idx]
+        old_end = p_node2elems[old_node_idx + 1]
+        triangles = node2elems[old_start:old_end]
+        new_node2elems.extend(triangles)
+        new_p_node2elems.append(len(new_node2elems))
+    
+    # Step 7: Reorder node2nodes and p_node2nodes using inverse mapping
+    new_node2nodes: List[int] = []
+    new_p_node2nodes: List[int] = [0]
+    for new_node_idx in range(n_nodes):
+        old_node_idx = inverse_mapping[new_node_idx]
+        old_start = p_node2nodes[old_node_idx]
+        old_end = p_node2nodes[old_node_idx + 1]
+        neighbors = node2nodes[old_start:old_end]
+        new_neighbors = [ mapping[old_idx] for old_idx in neighbors ]
+        new_node2nodes.extend(new_neighbors)
+        new_p_node2nodes.append(len(new_node2nodes))
+    
+    return (
+        new_node_coords, 
+        new_elem2nodes, 
+        new_node2elems, 
+        new_p_node2elems, 
+        new_node2nodes, 
+        new_p_node2nodes
+    )
