@@ -12,11 +12,14 @@ from .visualize import (
     plot_triangulation_with_points,
     plot_triangulation,
     plot_adjancy_matrix,
+    plot_triangulation_with_elem
     )
 
 from .utils import (
     log
     )
+
+# ----------------------- Main Mesh Cleaning Function ----------------------- #
 
 def clean_mesh(
     node_coords: np.ndarray,
@@ -25,12 +28,14 @@ def clean_mesh(
     node_nodes: List[List[int]],
     super_node_coords: List[int],
     polygon_outer_edges: List[Tuple[int, int]],
+    polygon_holes_edges: List[List[Tuple[int, int]]],
     verbose: int = 1
 ) -> Tuple[np.ndarray, List[Tuple[int, int, int]], List[List[int]]]:
     """
     Cleans the mesh by performing the following steps:
     1. Remove Super-Triangle Elements
     2. Filter Exterior Elements
+    3. Filter Elements in Holes
     3. Remove Super-Triangle Nodes
     4. Reindex Elements
     5. Rebuild Node-to-Elements Mapping
@@ -43,6 +48,7 @@ def clean_mesh(
     - node_nodes (List[List[int]]): List of lists, where each sublist contains the nodes connected to a node.
     - super_node_coords (List[int]): List of indices representing the super-triangle nodes in `node_coords`.
     - polygon_outer_edges (List[Tuple[int, int]]): List of edges defining the outer boundary of the polygon, where each edge is a tuple of two vertex indices.
+    - polygon_holes_edges (List[List[Tuple[int, int]]]): List of lists, where each sublist contains the edges defining a hole in the polygon.
     - verbose (int): Verbosity level for logging (0: silent, 1: basic, 2: detailed). Default is 1.
 
     Returns:
@@ -72,15 +78,24 @@ def clean_mesh(
     if verbose >=2:
         log(f"Total elem_nodes after removal: {len([tri for tri in elem_nodes if tri is not None])}", verbose, level=2)
 
-    plot_triangulation(node_coords, elem_nodes, title="Triangulation after removing super-triangle elem_nodes")
+    if verbose >=2:
+        plot_triangulation(node_coords, elem_nodes, title="Triangulation after removing super-triangle elem_nodes")
     
-    # Step 2: Remove the elem_nodes exterior to the boundary
+    # Step 2a: Remove the elem_nodes exterior to the boundary
     step_start = time()
     exterior_removed = filter_exterior_elem_nodes(elem_nodes, node_elems, node_nodes, polygon_outer_edges)
     step_time = time() - step_start
     log(f"Step 2: Removed exterior elem_nodes in {step_time:.4f} seconds.", verbose, level=1)
     if verbose >=2:
         log(f"Total elem_nodes after removing exterior: {len([tri for tri in elem_nodes if tri is not None])}", verbose, level=2)
+
+    # Step 2b: Remove the elem_nodes in the holes
+    step_start = time()
+    holes_removed = filter_holes_elem_nodes(elem_nodes, node_elems, node_nodes, polygon_holes_edges)
+    step_time = time() - step_start
+    log(f"Step 3: Removed elem_nodes in holes in {step_time:.4f} seconds.", verbose, level=1)
+    if verbose >=2:
+        log(f"Total elem_nodes after removing holes: {len([tri for tri in elem_nodes if tri is not None])}", verbose, level
 
     # Step 3: Remove the super-triangle node_coords
     step_start = time()
@@ -149,6 +164,8 @@ def clean_mesh(
     log(f"Mesh cleaning completed in {total_time:.4f} seconds.", verbose, level=1)
     
     return node_coords, new_elem_nodes, node_elems, node_nodes
+
+# ----------------------- Mesh Cleaning Helper Functions ----------------------- #
 
 def get_edge(
         v1: int,
@@ -257,6 +274,135 @@ def filter_exterior_elem_nodes(
                     boundary_edges.add(te)
                     edge_queue.append(te)
 
+def find_adjacent_triangles(
+        edge: Tuple[int, int],
+        node_elems: List[List[int]]
+) -> Set[int]:
+    """
+    Finds all triangles adjacent to a given edge.
+
+    Parameters:
+    - edge (Tuple[int, int]): Tuple representing the edge as two vertex indices.
+    - node_elems (List[List[int]]): List of lists, where each sublist contains the indices of triangles connected to a node.
+
+    Returns:
+    - Set[int]: A set of triangle indices adjacent to the given edge.
+    
+    """
+    triangles_u = set(node_elems[edge[0]])
+    triangles_v = set(node_elems[edge[1]])
+    return triangles_u.intersection(triangles_v)
+
+def flood_fill_inside_hole(
+    start_tri_idx: int,
+    elem_nodes: List[Optional[Tuple[int, int, int]]],
+    node_elems: List[List[int]],
+    hole_edges_set: Set[Tuple[int, int]]
+) -> Set[int]:
+    """
+    Performs flood-fill traversal to find all triangles inside a hole.
+
+    Parameters:
+    - start_tri_idx (int): Index of the starting triangle inside the hole.
+    - elem_nodes (List[Optional[Tuple[int, int, int]]]): List of existing triangles, where each triangle is represented
+        as a tuple of three vertex indices (v0, v1, v2). A value of `None` indicates a deleted triangle.
+    - node_elems (List[List[int]]): List of lists, where each sublist contains the indices of triangles connected to a node.
+    - hole_edges_set (Set[Tuple[int, int]]): Set of edges defining the hole boundary.
+
+    Returns:
+    - Set[int]: A set of triangle indices inside the hole.
+
+    """
+    visited = set()
+    queue = deque([start_tri_idx])
+
+    while queue:
+        tri_idx = queue.popleft()
+        if tri_idx in visited:
+            continue
+        visited.add(tri_idx)
+        tri = elem_nodes[tri_idx]
+        if tri is None:
+            continue  # Skip deleted triangles
+        u, v, w = tri
+        edges = [get_edge(u, v), get_edge(v, w), get_edge(w, u)]
+        for edge in edges:
+            if edge in hole_edges_set:
+                continue  # Do not cross hole boundary edges
+            neighbor_triangles = find_adjacent_triangles(edge, node_elems)
+            for neighbor_tri_idx in neighbor_triangles:
+                if neighbor_tri_idx not in visited:
+                    queue.append(neighbor_tri_idx)
+    return visited
+
+def filter_holes_elem_nodes(
+    elem_nodes: List[Optional[Tuple[int, int, int]]],
+    node_elems: List[List[int]],
+    node_nodes: List[List[int]],
+    polygon_holes_edges: List[List[Tuple[int, int]]],
+) -> List[int]:
+    """
+    This function identifies and removes triangles that are interior to each of the polygon holes defined by `polygon_holes_edges`. 
+
+    Parameters:
+    - elem_nodes (List[Optional[Tuple[int, int, int]]]): List of existing triangles, where each triangle is represented 
+      as a tuple of three vertex indices (v0, v1, v2). A value of `None` indicates a deleted triangle.
+    - node_elems (List[List[int]]): List of lists, where each sublist contains the indices of triangles connected to a node.
+    - node_nodes (List[List[int]]): List of lists, where each sublist contains the indices of nodes connected to a node.
+    - polygon_holes_edges (List[List[Tuple[int, int]]]): List of lists, where each sublist contains the edges defining a hole in the polygon.
+
+    Returns:
+    - List[int]: A list of indices of the triangles that were identified as interior to holes and removed.
+    """
+    triangles_to_remove = set()
+
+    for hole_idx, hole_edges in enumerate(polygon_holes_edges):
+        # Step 1: Collect all edges of the current hole into a set
+        hole_edges_set = set(get_edge(*edge) for edge in hole_edges)
+        hole_nodes_set = set([edge[0] for edge in hole_edges] + [edge[1] for edge in hole_edges])
+
+        # Step 2: Identify an initial triangle inside the hole
+        inside_tri_idx = None
+        for edge in hole_edges:
+            adjacent_triangles = find_adjacent_triangles(get_edge(*edge), node_elems)
+
+            tri_indices = list(adjacent_triangles)
+            print(tri_indices)
+            tri1 = elem_nodes[tri_indices[0]]
+            tri2 = elem_nodes[tri_indices[1]]
+            tri1_extra_vertex = (set(tri1) - set(edge)).pop()
+            tri2_extra_vertex = (set(tri2) - set(edge)).pop()
+
+            # Check if one of the triangles has a vertex that is not on the boundary, because triangles in the hole are formed exclusively by boundary nodes
+            if tri1_extra_vertex in hole_nodes_set:
+                pass 
+            else:
+                inside_tri_idx = tri_indices[1]
+                break
+            if tri2_extra_vertex in hole_nodes_set:
+                pass
+            else:
+                inside_tri_idx = tri_indices[0]
+                break
+
+        if inside_tri_idx is None:
+            # If no initial triangle found, possibly due to mesh issues
+            print(f"Warning: Could not find an initial triangle inside hole {hole_idx}.")
+            continue
+
+        # Step 3: Perform flood-fill to find all triangles inside the hole
+        triangles_in_hole = flood_fill_inside_hole(
+            inside_tri_idx, elem_nodes, node_elems, hole_edges_set
+        )
+        triangles_to_remove.update(triangles_in_hole)
+
+    # Step 4: Delete all identified triangles inside holes
+    for tri_idx in triangles_to_remove:
+        delete_triangle(tri_idx, elem_nodes, node_elems, node_nodes)
+
+    return list(triangles_to_remove)
+        
+# -----------------------  Convertion Functions ----------------------- #
 
 def convert_to_mesh_format(
     node_coords: List[Tuple[float, float]], 

@@ -504,7 +504,8 @@ def heterogen_disk_sampling():
 # ---------- Main Function ---------- #
 
 def generate_cloud(
-    polygon: Union[List[Tuple[float, float]], np.ndarray], 
+    polygon_outer: Union[List[Tuple[float, float]], np.ndarray], 
+    polygons_holes: Union[List[Tuple[float, float]], np.ndarray], 
     min_distance: float, 
     verbose: int = 1
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -514,8 +515,10 @@ def generate_cloud(
     using Poisson Disk Sampling for interior points and distance-based spacing for boundary points.
 
     Parameters:
-    polygon : list or numpy.ndarray
-        A list of (x, y) tuples or a numpy array representing the polygon's coordinates.
+    polygon_outer : list of tuples or numpy.ndarray
+        A list of (x, y) tuples representing the outer boundary of the polygon in counterclockwise order.
+    polygons_holes : list of lists of tuples or numpy.ndarray
+        A list of lists of (x, y) tuples representing the holes in the polygon, if any.
     min_distance : float
         Minimum distance between points in the generated cloud.
     verbose : int, optional
@@ -531,14 +534,28 @@ def generate_cloud(
     log("Starting point cloud generation.", verbose, level=1)
     
     # Step 1: Remove duplicate points from the polygon
-    polygon = remove_duplicate_points(polygon)
-    log(f"Removed duplicate points. Number of polygon vertices: {len(polygon)}", verbose, level=2)
+    polygon_outer = remove_duplicate_points(polygon_outer)
+    log(f"Removed duplicate points. Number of polygon vertices: {len(polygon_outer)}", verbose, level=2)
     
     # Step 2: Calculate the minimum distance between adjacent points along the polygon edges
-    min_distance_polygon = min(
-        np.linalg.norm(np.array(polygon[i]) - np.array(polygon[(i + 1) % len(polygon)]))
-        for i in range(len(polygon))
+    min_distance_polygon_outer = min(
+        np.linalg.norm(np.array(polygon_outer[i]) - np.array(polygon_outer[(i + 1) % len(polygon_outer)]))
+        for i in range(len(polygon_outer))
     )
+    
+    if polygons_holes:  # Check if there are holes to avoid errors
+        min_distance_polygon_holes = min(
+            min(
+                np.linalg.norm(np.array(polygon_hole[i]) - np.array(polygon_hole[(i + 1) % len(polygon_hole)]))
+                for i in range(len(polygon_hole))
+            )
+            for polygon_hole in polygons_holes
+        )
+    else:
+        min_distance_polygon_holes = float('inf')  # No holes, set to a large value
+
+    min_distance_polygon = min(min_distance_polygon_outer, min_distance_polygon_holes)
+
     log(f"Minimum edge length in polygon: {min_distance_polygon:.4f}", verbose, level=2)
     
     # Step 3: Determine the effective minimum distance for both boundary and interior points
@@ -546,16 +563,32 @@ def generate_cloud(
     log(f"Effective minimum distance between points: {effective_min_distance:.4f}", verbose, level=2)
     
     # Step 4: Generate boundary points along the polygon edges
-    boundary_node_coords = generate_boundary_node_coords(polygon, effective_min_distance, verbose)
-    boundary_node_coords = remove_duplicate_points(boundary_node_coords)
-    boundary_node_coords = np.array(boundary_node_coords)
-    log(f"Generated {len(boundary_node_coords)} boundary points.", verbose, level=1)
+    outer_boundary_node_coords = generate_boundary_node_coords(polygon_outer, effective_min_distance, verbose)
+    outer_boundary_node_coords = remove_duplicate_points(outer_boundary_node_coords)
+    outer_boundary_node_coords = np.array(outer_boundary_node_coords)
+    log(f"Generated {len(outer_boundary_node_coords)} outer boundary points.", verbose, level=1)
+
+    hole_boundaries_node_coords = []
+    for polygon_hole in polygons_holes:
+        hole_boundary_node_coords = generate_boundary_node_coords(polygon_hole, effective_min_distance, verbose)
+        hole_boundary_node_coords = remove_duplicate_points(hole_boundary_node_coords)
+        hole_boundary_node_coords = np.array(hole_boundary_node_coords)
+        hole_boundaries_node_coords.append(hole_boundary_node_coords)
+        log(f"Generated {len(hole_boundary_node_coords)} hole boundary points.", verbose, level=1)
+    
+    # Flatten hole boundaries into a single array
+    if hole_boundaries_node_coords:
+        hole_boundaries_node_coords_flattened = np.concatenate(hole_boundaries_node_coords)
+    else:
+        hole_boundaries_node_coords_flattened = np.array([])
+
+    log(f"Total boundary points: {len(outer_boundary_node_coords) + len(hole_boundaries_node_coords)}", verbose, level=1)
     
     # Step 5: Generate interior points using Poisson Disk Sampling
     log("Generating interior points using Poisson Disk Sampling.", verbose, level=1)
     interior_node_coords = poisson_disk_sampling(
-        polygon_outer=polygon,
-        polygons_holes=[],  # Assuming no holes; modify as needed
+        polygon_outer=polygon_outer,
+        polygons_holes=polygons_holes,
         radius=effective_min_distance,
         k=50,
         verbose=verbose
@@ -565,7 +598,9 @@ def generate_cloud(
     log(f"Generated {len(interior_node_coords)} interior points.", verbose, level=1)
     
     # Step 6: Combine boundary and interior points into a single array
+    boundary_node_coords = np.concatenate([outer_boundary_node_coords, hole_boundaries_node_coords_flattened])
+
     combined_points = np.concatenate([boundary_node_coords, interior_node_coords])
     log(f"Total points in cloud: {combined_points.shape[0]}", verbose, level=1)
     
-    return combined_points, boundary_node_coords, interior_node_coords
+    return combined_points, outer_boundary_node_coords, hole_boundaries_node_coords, interior_node_coords
