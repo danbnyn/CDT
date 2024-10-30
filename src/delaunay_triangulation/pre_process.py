@@ -1,36 +1,37 @@
 import numpy as np
-import math
 from shapely.geometry import Polygon, Point # Enable precise geometric operations
 from skimage import measure
 from time import time
+from typing import Tuple, Optional, List, Union
 
-from src.utils import log
+from .utils import (
+    log
+)
 
-from src.operations import (
+from .operations import (
     add_triangle,
-    )
+)
 
-from src.predicates import (
+from .predicates import (
     is_valid,
-    is_point_inside,
-    distance,
-    )
+)
 
 
 # ---------- Fractal Functions ---------- #
 
 def generate_mandelbrot_boundary(
-    resolution=500,
-    max_iterations=100,
-    x_range=(-2.0, 1.0),
-    y_range=(-1.5, 1.5),
-    verbose=1
+    resolution: int = 500,
+    max_iterations: int = 100,
+    x_range: Tuple[float, float] = (-2.0, 1.0),
+    y_range: Tuple[float, float] = (-1.5, 1.5),
+    verbose: int = 1
 ) -> np.ndarray:
     """
-    Generates the Mandelbrot set boundary as a polygon based on the specified depth.
+    This function computes the boundary of the Mandelbrot set by iterating over a grid of points in the complex plane.
+    Each point is checked to determine whether it escapes to infinity within a maximum number of iterations. Points that
+    do not escape are considered part of the Mandelbrot set, and their boundary is calculated.
 
     Parameters:
-    ----------
     resolution : int, optional
         Determines the resolution of the grid. Higher resolution results in a finer grid and more detailed boundary.
     max_iterations : int, optional
@@ -43,7 +44,6 @@ def generate_mandelbrot_boundary(
         Integer indicating the verbosity level (0: silent, 1: basic, 2: detailed, 3: highly detailed).
 
     Returns:
-    -------
     boundary_polygon : np.ndarray
         An Nx2 array of (x, y) coordinates defining the boundary of the Mandelbrot set.
     """
@@ -120,17 +120,28 @@ def generate_mandelbrot_boundary(
 
 # ---------- Generate Generic Non Convex Polygon ---------- #
 
-def generate_non_convex_boundary(num_points=20, radius=1.0, noise_factor=0.3):
+def generate_non_convex_boundary(
+    num_points: int = 20, 
+    radius: float = 1.0, 
+    noise_factor: float = 0.3
+) -> List[Tuple[float, float]]:
     """
-    Generates boundary points of a non-convex shape in CCW order.
+    Generates boundary points of a non-convex shape in counter-clockwise (CCW) order.
+
+    Description:
+    This function generates a set of points representing the boundary of a non-convex shape. 
+    The points are generated in polar coordinates and then converted to Cartesian coordinates. 
+    The shape is made non-convex by introducing random noise to the radii. The resulting points 
+    are sorted in counter-clockwise order based on their angles.
 
     Parameters:
-    - num_points: Number of boundary points to generate.
-    - radius: Approximate radius of the shape.
-    - noise_factor: Amount of noise to add to create non-convexity (0 to 1).
+    - num_points (int): Number of boundary points to generate (default is 20).
+    - radius (float): Approximate radius of the shape (default is 1.0).
+    - noise_factor (float): Amount of noise to add to create non-convexity, ranging from 0 to 1 
+      (default is 0.3).
 
     Returns:
-    - boundary_node_coords: List of points (x, y) in CCW order.
+    - List[Tuple[float, float]]: A list of points (x, y) representing the boundary in CCW order.
     """
     # Create angles evenly spaced around the circle
     angles = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
@@ -138,49 +149,66 @@ def generate_non_convex_boundary(num_points=20, radius=1.0, noise_factor=0.3):
     # Generate radii with some noise to create a non-convex shape
     radii = radius * (1 + noise_factor * (np.random.rand(num_points) - 0.5))
     
-    # Generate boundary points in polar coordinates, then convert to Cartesian
+    # Generate boundary points in polar coordinates, then convert to Cartesian coordinates
     boundary_node_coords = np.column_stack((radii * np.cos(angles), radii * np.sin(angles)))
     
-    # Sort points in CCW order based on their angle (ensuring CCW order)
+    # Sort points in CCW order based on their angle
     angles = np.arctan2(boundary_node_coords[:, 1], boundary_node_coords[:, 0])
     boundary_node_coords = boundary_node_coords[np.argsort(angles)]
     
-    return boundary_node_coords
+    return boundary_node_coords.tolist()
 
 # ------------------------------------ Initialization Functions ------------------------------------ #
 
-def initialize_delaunay_node_elems(num_delaunay_node_coords):
+def initialize_node_elems(num_delaunay_node_coords: int) -> List[List[int]]:
     """
     Initializes the delaunay_node_elems adjacency list.
 
     Parameters:
-    - num_delaunay_node_coords: Total number of delaunay_node_coords in the mesh.
+    - num_delaunay_node_coords (int): Total number of delaunay_node_coords in the mesh.
 
     Returns:
-    - delaunay_node_elems: List of lists, where each sublist contains triangle indices.
+    - List[List[int]]: A list of lists, where each sublist contains triangle indices associated with each node.
     """
     return [[] for _ in range(num_delaunay_node_coords)]
 
-def initialize_triangulation(cloud_node_coords, elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems):
+def initialize_node_nodes(num_delaunay_node_coords: int) -> List[List[int]]:
+    """
+    Initializes the delaunay_node_nodes adjacency list.
+
+    Parameters:
+    - num_delaunay_node_coords (int): Total number of delaunay_node_coords in the mesh.
+
+    Returns:
+    - List[List[int]]: A list of lists, where each sublist contains adjacent node indices.
+    """
+    return [[] for _ in range(num_delaunay_node_coords)]
+
+def initialize_triangulation(
+    cloud_node_coords: List[Tuple[float, float]], 
+    elem_nodes: List[Optional[Tuple[int, int, int]]], 
+    node_elems: List[List[int]], 
+    node_nodes: List[List[int]]
+) -> np.ndarray:
     """
     Initializes the triangulation with four affinely independent delaunay_node_coords.
     
     Parameters:
-    - cloud_node_coords: List of points (tuples of (x, y)) to triangulate.
-    - elem_nodes: List to store elem_nodes.
-    - delaunay_dic_edge_triangle: Dictionary mapping edges to triangle indices.
-    - delaunay_node_elems: List of lists, where each sublist contains triangle indices.
+    - cloud_node_coords (List[Tuple[float, float]]): List of points (tuples of (x, y)) to triangulate.
+    - elem_nodes (List[Optional[Tuple[int, int, int]]]): List of elem_nodes representing the triangulated mesh.
+    - node_elems (List[List[int]]): List of lists, where each sublist contains triangle indices associated with each node.
+    - node_nodes (List[List[int]]): List of lists, where each sublist contains adjacent node indices.
     
     Returns:
-    - List of initial triangle indices.
+    - np.ndarray: Array of initial triangle coordinates forming the super-triangle.
+    
+    Raises:
+    - ValueError: If less than four delaunay_node_coords are provided.
     """
     if len(cloud_node_coords) < 4:
         raise ValueError("At least four delaunay_node_coords are required to initialize the triangulation.")
     
-
-    # For 2D Delaunay triangulation, initialize with a super-triangle or similar.
-
-    # Compute bounding box
+    # Compute bounding box for the given node coordinates
     xs = [v[0] for v in cloud_node_coords]
     ys = [v[1] for v in cloud_node_coords]
     min_x, max_x = min(xs), max(xs)
@@ -188,39 +216,68 @@ def initialize_triangulation(cloud_node_coords, elem_nodes, delaunay_dic_edge_tr
     
     dx = max_x - min_x
     dy = max_y - min_y
-    delta_max = max(dx, dy) * 5 # Make it large enough
+    delta_max = max(dx, dy) * 5  # Make it large enough to encompass the points
     
     # Create three additional points forming a super-triangle
     super_v0 = (min_x - delta_max, min_y - delta_max)
     super_v1 = (min_x + 2 * delta_max, min_y - delta_max)
     super_v2 = (min_x - delta_max, min_y + 2 * delta_max)
     
+    # Add the super-triangle to the triangulation
+    add_triangle(0, 1, 2, elem_nodes, node_elems, node_nodes)
 
-    # Add the super-triangle 
-    add_triangle(0, 1, 2, elem_nodes, delaunay_dic_edge_triangle, delaunay_node_elems)
-
-    # Initialize the delaunay_node_coords with super-triangle delaunay_node_coords
+    # Initialize the delaunay_node_coords with super-triangle coordinates
     return np.array([super_v0, super_v1, super_v2])
+
+def remove_duplicate_points(
+        points: np.ndarray
+) -> np.ndarray:
+    """
+    This function takes an array of points and removes duplicates while maintaining the original 
+    order of appearance. It uses a set to track seen points for efficient duplicate detection.
+
+    Parameters:
+    points : np.ndarray
+        An array of points with shape (n, 2), where each row represents a point (x, y).
+
+    Returns:
+    np.ndarray
+        An array of unique points with shape (m, 2), preserving the original order.
+    """
+    seen = set()  # Set to track seen points
+    unique_points = []  # List to store unique points
+
+    for point in points:
+        # Convert the point to a tuple for hashable comparison in the set
+        pt_tuple = tuple(point)
+        if pt_tuple not in seen:
+            seen.add(pt_tuple)  # Mark this point as seen
+            unique_points.append(point)  # Add the unique point to the list
+
+    # Convert the list of unique points back to a numpy array and return it
+    return np.array(unique_points)
 
 # ---------- Generate Boundary Functions ---------- #
 
-def generate_boundary_node_coords(polygon, min_distance, verbose=1):
+def generate_boundary_node_coords(
+    polygon: List[Tuple[float, float]], 
+    min_distance: float, 
+    verbose: int = 1
+) -> np.ndarray:
     """
-    Generate points along the boundary of a polygon based on a specified density.
-
-    The density determines how closely spaced the boundary points are. Higher density results in more points.
+    This function generates points evenly spaced along the edges of a polygon such that the distance between 
+    adjacent points is at least `min_distance`. The points are generated using linear interpolation along each 
+    polygon edge.
 
     Parameters:
-    ----------
-    polygon : list or numpy.ndarray
-        A list of (x, y) tuples representing the polygon's delaunay_node_coords.
+    polygon : list of tuples or numpy.ndarray
+        A list of (x, y) tuples representing the polygon's vertices in counterclockwise order.
     min_distance : float
         Minimum distance between points on the boundary.
     verbose : int, optional
         Integer indicating the verbosity level (0: silent, 1: basic, 2: detailed, 3: highly detailed).
 
     Returns:
-    -------
     numpy.ndarray
         An array of boundary points distributed along the polygon's edges.
     """
@@ -266,87 +323,81 @@ def generate_boundary_node_coords(polygon, min_distance, verbose=1):
 
 # ---------- Poisson Disk Sampling ---------- #
 
-def generate_point_around(point, r):
-    theta = np.random.uniform(0, 2 * math.pi)
-    r = np.random.uniform(r, 2 * r)
-    return (point[0] + r * math.cos(theta), point[1] + r * math.sin(theta))
-
-# def compute_centroid(delaunay_node_coords):
-#     """
-#     Compute the centroid of a polygon.
-#     delaunay_node_coords: list of (x, y) tuples
-#     """
-#     signed_area = 0
-#     Cx = 0
-#     Cy = 0
-#     n = len(delaunay_node_coords)
-#     for i in range(n):
-#         x0, y0 = delaunay_node_coords[i]
-#         x1, y1 = delaunay_node_coords[(i + 1) % n]
-#         A = x0 * y1 - x1 * y0
-#         signed_area += A
-#         Cx += (x0 + x1) * A
-#         Cy += (y0 + y1) * A
-#     signed_area *= 0.5
-#     if signed_area == 0:
-#         raise ValueError("Polygon area is zero, invalid polygon.")
-#     Cx /= (6 * signed_area)
-#     Cy /= (6 * signed_area)
-#     return (Cx, Cy)
-
-# def scale_polygon(delaunay_node_coords, d):
-#     """
-#     Scale a polygon by moving each vertex outward by distance d.
-#     delaunay_node_coords: list of (x, y) tuples in CCW order
-#     Sadly this only work on convex polygons.
-#     d: offset distance
-#     Returns a new list of scaled delaunay_node_coords.
-#     """
-#     centroid = compute_centroid(delaunay_node_coords)
-#     scaled_delaunay_node_coords = []
-#     for (x, y) in delaunay_node_coords:
-#         # Direction from centroid to vertex
-#         dx = x - centroid[0]
-#         dy = y - centroid[1]
-#         length = math.hypot(dx, dy)
-#         if length == 0:
-#             raise ValueError("A vertex coincides with the centroid.")
-#         # Unit direction vector
-#         ux = dx / length
-#         uy = dy / length
-#         # Offset vertex
-#         new_x = x + ux * d
-#         new_y = y + uy * d
-#         scaled_delaunay_node_coords.append((new_x, new_y))
-#     return scaled_delaunay_node_coords
-
-def offset_polygon_shapely(delaunay_node_coords, d):
+def generate_point_around(
+        point: Tuple[float, float], 
+        r: float
+) -> Tuple[float, float]:
     """
+    This function generates a random point around a given point within a specified range. The distance 
+    from the given point to the generated point is randomly chosen between `r` and `2 * r`, and the angle 
+    is chosen randomly between 0 and 2π.
+
     Parameters:
+    - point (Tuple[float, float]): The original point (x, y) around which the new point will be generated.
+    - r (float): The minimum distance from the original point to the generated point.
 
-
-    Offset a polygon using Shapely's buffer method.
-    Positive d offsets outward, negative d offsets inward.
-    Returns a list of polygons, each represented as a list of (x, y) tuples.
+    Returns:
+    - Tuple[float, float]: A tuple representing the coordinates of the generated point (x, y).
     """
+    # Generate a random angle between 0 and 2π
+    theta = np.random.uniform(0, 2 * np.pi)
+    
+    # Generate a random distance between r and 2 * r
+    distance = np.random.uniform(r, 2 * r)
+    
+    # Calculate the new point's coordinates using polar coordinates
+    new_x = point[0] + distance * np.cos(theta)
+    new_y = point[1] + distance * np.sin(theta)
+    
+    return new_x, new_y
+
+def offset_polygon_shapely(
+    delaunay_node_coords: List[Tuple[float, float]], 
+    d: float
+) -> List[List[Tuple[float, float]]]:
+    """
+    This function creates a new polygon by offsetting the given polygon (defined by `delaunay_node_coords`) 
+    inward or outward by a specified distance `d`. A positive `d` value offsets the polygon outward, and a 
+    negative `d` value offsets it inward. It uses Shapely's `buffer` method to perform the offset.
+
+    Parameters:
+    - delaunay_node_coords (List[Tuple[float, float]]): List of vertex coordinates (x, y) defining the polygon.
+    - d (float): The distance by which to offset the polygon. Positive for outward, negative for inward.
+
+    Returns:
+    - buffered_poly (Polygon or MultiPolygon): The offset polygon created using Shapely.
+    
+    Raises:
+    - ValueError: If the input polygon is not valid.
+    """
+    # Create a Shapely Polygon from the provided coordinates
     poly = Polygon(delaunay_node_coords)
+    
+    # Check if the polygon is valid
     if not poly.is_valid:
         raise ValueError("Invalid polygon.")
-
-    # Buffer the polygon by distance d
+    
+    # Offset the polygon using the buffer method
     buffered_poly = poly.buffer(d)
 
     return buffered_poly
 
-def poisson_disk_sampling(polygon_outer, polygons_holes, radius, k=50, verbose=1):
+def poisson_disk_sampling(
+    polygon_outer: List[Tuple[float, float]], 
+    polygons_holes: List[List[Tuple[float, float]]], 
+    radius: float, 
+    k: int = 50, 
+    verbose: int = 1
+) -> List[Tuple[float, float]]:
     """
-    Perform Poisson Disk Sampling within a polygon with optional holes.
+    This function generates points within the provided polygon using Poisson Disk Sampling, ensuring that 
+    each point is at least a specified minimum distance from others. The function handles polygons with 
+    holes and allows adjusting the verbosity level for logging.
 
     Parameters:
-    ----------
-    polygon_outer : list or numpy.ndarray
+    polygon_outer : List[Tuple[float, float]]
         Outer boundary of the polygon as a list of (x, y) tuples.
-    polygons_holes : list of lists or numpy.ndarray
+    polygons_holes : List[List[Tuple[float, float]]]
         List of hole polygons, each as a list of (x, y) tuples.
     radius : float
         Minimum distance between points.
@@ -356,8 +407,7 @@ def poisson_disk_sampling(polygon_outer, polygons_holes, radius, k=50, verbose=1
         Integer indicating the verbosity level (0: silent, 1: basic, 2: detailed, 3: highly detailed).
 
     Returns:
-    -------
-    list of tuples
+    List[Tuple[float, float]]
         Filtered list of points generated by Poisson Disk Sampling.
     """
         
@@ -370,7 +420,7 @@ def poisson_disk_sampling(polygon_outer, polygons_holes, radius, k=50, verbose=1
     log(f"Calculated bounding box: x=({min_x}, {max_x}), y=({min_y}, {max_y})", verbose, level=2)
     
     # Initialize the grid for the bounding box
-    cell_size = radius / math.sqrt(2)
+    cell_size = radius / np.sqrt(2)
     grid_width = int((max_x - min_x) / cell_size) + 1
     grid_height = int((max_y - min_y) / cell_size) + 1
     grid = [[None for _ in range(grid_height)] for _ in range(grid_width)]
@@ -451,23 +501,27 @@ def poisson_disk_sampling(polygon_outer, polygons_holes, radius, k=50, verbose=1
 def heterogen_disk_sampling():
     pass
 
-# ---------- Main Functions ---------- #
+# ---------- Main Function ---------- #
 
-def generate_cloud(polygon, min_distance, verbose=1):
+def generate_cloud(
+    polygon: Union[List[Tuple[float, float]], np.ndarray], 
+    min_distance: float, 
+    verbose: int = 1
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Generate a point cloud within a polygon with a specified density and margin.
+    This function generates a set of points within the provided polygon while ensuring a specified 
+    minimum distance between them. It handles both the boundary and the interior of the polygon 
+    using Poisson Disk Sampling for interior points and distance-based spacing for boundary points.
 
     Parameters:
-    ----------
     polygon : list or numpy.ndarray
-        A list of (x, y) tuples representing the polygon's delaunay_node_coords.
+        A list of (x, y) tuples or a numpy array representing the polygon's coordinates.
     min_distance : float
         Minimum distance between points in the generated cloud.
     verbose : int, optional
         Integer indicating the verbosity level (0: silent, 1: basic, 2: detailed, 3: highly detailed).
 
     Returns:
-    -------
     tuple
         A tuple containing:
             - numpy.ndarray: Combined array of boundary and interior points.
@@ -476,27 +530,28 @@ def generate_cloud(polygon, min_distance, verbose=1):
     """
     log("Starting point cloud generation.", verbose, level=1)
     
-    # Remove duplicate points from the polygon
+    # Step 1: Remove duplicate points from the polygon
     polygon = remove_duplicate_points(polygon)
-    log(f"Removed duplicate points. Number of delaunay_node_coords: {len(polygon)}", verbose, level=2)
+    log(f"Removed duplicate points. Number of polygon vertices: {len(polygon)}", verbose, level=2)
     
-    # Get the minimum distance between points in the input polygon edges
+    # Step 2: Calculate the minimum distance between adjacent points along the polygon edges
     min_distance_polygon = min(
         np.linalg.norm(np.array(polygon[i]) - np.array(polygon[(i + 1) % len(polygon)]))
         for i in range(len(polygon))
     )
     log(f"Minimum edge length in polygon: {min_distance_polygon:.4f}", verbose, level=2)
     
-    # Determine the effective minimum distance
+    # Step 3: Determine the effective minimum distance for both boundary and interior points
     effective_min_distance = min(min_distance, min_distance_polygon)
     log(f"Effective minimum distance between points: {effective_min_distance:.4f}", verbose, level=2)
     
-    # Generate boundary points
+    # Step 4: Generate boundary points along the polygon edges
     boundary_node_coords = generate_boundary_node_coords(polygon, effective_min_distance, verbose)
     boundary_node_coords = remove_duplicate_points(boundary_node_coords)
     boundary_node_coords = np.array(boundary_node_coords)
+    log(f"Generated {len(boundary_node_coords)} boundary points.", verbose, level=1)
     
-    # Generate interior points using Poisson Disk Sampling
+    # Step 5: Generate interior points using Poisson Disk Sampling
     log("Generating interior points using Poisson Disk Sampling.", verbose, level=1)
     interior_node_coords = poisson_disk_sampling(
         polygon_outer=polygon,
@@ -507,30 +562,10 @@ def generate_cloud(polygon, min_distance, verbose=1):
     )
     interior_node_coords = remove_duplicate_points(interior_node_coords)
     interior_node_coords = np.array(interior_node_coords)
+    log(f"Generated {len(interior_node_coords)} interior points.", verbose, level=1)
     
-    # Combine boundary and interior points
+    # Step 6: Combine boundary and interior points into a single array
     combined_points = np.concatenate([boundary_node_coords, interior_node_coords])
     log(f"Total points in cloud: {combined_points.shape[0]}", verbose, level=1)
     
     return combined_points, boundary_node_coords, interior_node_coords
-
-def remove_duplicate_points(points):
-    """
-    Remove duplicate points from an array of points while preserving the original order.
-
-    Parameters:
-    - points (np.ndarray): An array of points with shape (n, 2).
-
-    Returns:
-    - unique_points (np.ndarray): An array of unique points with shape (m, 2), preserving the original order.
-    """
-    seen = set()
-    unique_points = []
-    for point in points:
-        # Convert the point to a tuple so it can be added to a set
-        pt_tuple = tuple(point)
-        if pt_tuple not in seen:
-            seen.add(pt_tuple)
-            unique_points.append(point)
-    return np.array(unique_points)
-
