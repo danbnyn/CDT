@@ -20,8 +20,6 @@ def generate_mesh(polygon_outer, polygons_holes, min_distance, verbose=1):
     # Step 2 : Perform the CDT on the boundary points to constrain the mesh and ensure that the futur boundary egdes are present
     outer_boundary_edges = generate_edges_from_points(outer_boundary_node_coords)
     hole_boundaries_edges = [generate_edges_from_points(hole_boundary) for hole_boundary in hole_boundaries_node_coords]
-    # print("hole_boundaries_edges", hole_boundaries_edges)
-    print(hole_boundaries_node_coords[0])
 
     outer_boundary_constrained_edges = convert_edges_to_ids(outer_boundary_edges, delaunay_node_coords)
     hole_boundaries_constrained_edges = [convert_edges_to_ids(hole_boundary_edges, delaunay_node_coords) for hole_boundary_edges in hole_boundaries_edges]

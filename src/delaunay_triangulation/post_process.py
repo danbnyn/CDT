@@ -95,7 +95,7 @@ def clean_mesh(
     step_time = time() - step_start
     log(f"Step 3: Removed elem_nodes in holes in {step_time:.4f} seconds.", verbose, level=1)
     if verbose >=2:
-        log(f"Total elem_nodes after removing holes: {len([tri for tri in elem_nodes if tri is not None])}", verbose, level
+        log(f"Total elem_nodes after removing holes: {len([tri for tri in elem_nodes if tri is not None])}", verbose, level=2)
 
     # Step 3: Remove the super-triangle node_coords
     step_start = time()
@@ -137,8 +137,6 @@ def clean_mesh(
     
     # Step 6: Rebuild the node_nodes list
     step_start = time()
-    log(f"Step 6: Rebuilding node_nodes...", verbose, level=1)
-    
     # Initialize new_node_nodes as list of sets to avoid duplicates
     new_node_nodes = [set() for _ in range(len(node_coords))]
     
@@ -367,7 +365,6 @@ def filter_holes_elem_nodes(
             adjacent_triangles = find_adjacent_triangles(get_edge(*edge), node_elems)
 
             tri_indices = list(adjacent_triangles)
-            print(tri_indices)
             tri1 = elem_nodes[tri_indices[0]]
             tri2 = elem_nodes[tri_indices[1]]
             tri1_extra_vertex = (set(tri1) - set(edge)).pop()
