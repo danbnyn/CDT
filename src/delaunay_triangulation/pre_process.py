@@ -75,6 +75,11 @@ def generate_mandelbrot_boundary(
     Z = np.zeros_like(C, dtype=np.complex128)
     iteration_array = np.full(C.shape, max_iterations, dtype=int)
 
+    # Minimum distance between points in the complex plane
+    dx = x[1] - x[0]
+    dy = y[1] - y[0]
+    min_distance = np.sqrt(dx**2 + dy**2)
+
     log(f"Generated meshgrid and initialized iteration arrays.", verbose, level=2)
     
     # Start Mandelbrot iteration
@@ -118,7 +123,9 @@ def generate_mandelbrot_boundary(
     total_time = time() - start_time
     log(f"Generated Mandelbrot boundary polygon with {boundary_polygon.shape[0]} points in {total_time:.4f} seconds.", verbose, level=1)
     
-    return boundary_polygon
+
+
+    return boundary_polygon, min_distance
 
 # ---------- Generate Generic Non Convex Polygon ---------- #
 
@@ -167,7 +174,7 @@ def initialize_node_elems(num_delaunay_node_coords: int) -> List[List[int]]:
     Initializes the delaunay_node_elems adjacency list.
 
     Parameters:
-    - num_delaunay_node_coords (int): Total number of delaunay_node_coords in the mesh.
+    - num_delaunay_node_coords (int): Total number of node_coords in the mesh.
 
     Returns:
     - List[List[int]]: A list of lists, where each sublist contains triangle indices associated with each node.
@@ -179,7 +186,7 @@ def initialize_node_nodes(num_delaunay_node_coords: int) -> List[List[int]]:
     Initializes the delaunay_node_nodes adjacency list.
 
     Parameters:
-    - num_delaunay_node_coords (int): Total number of delaunay_node_coords in the mesh.
+    - num_delaunay_node_coords (int): Total number of node_coords in the mesh.
 
     Returns:
     - List[List[int]]: A list of lists, where each sublist contains adjacent node indices.
@@ -193,7 +200,7 @@ def initialize_triangulation(
     node_nodes: List[List[int]]
 ) -> np.ndarray:
     """
-    Initializes the triangulation with four affinely independent delaunay_node_coords.
+    Initializes the triangulation with four affinely independent node_coords.
     
     Parameters:
     - cloud_node_coords (List[Tuple[float, float]]): List of points (tuples of (x, y)) to triangulate.
@@ -205,10 +212,10 @@ def initialize_triangulation(
     - np.ndarray: Array of initial triangle coordinates forming the super-triangle.
     
     Raises:
-    - ValueError: If less than four delaunay_node_coords are provided.
+    - ValueError: If less than four node_coords are provided.
     """
     if len(cloud_node_coords) < 4:
-        raise ValueError("At least four delaunay_node_coords are required to initialize the triangulation.")
+        raise ValueError("At least four node_coords are required to initialize the triangulation.")
     
     # Compute bounding box for the given node coordinates
     xs = [v[0] for v in cloud_node_coords]
@@ -228,11 +235,12 @@ def initialize_triangulation(
     # Add the super-triangle to the triangulation
     add_triangle(0, 1, 2, elem_nodes, node_elems, node_nodes)
 
-    # Initialize the delaunay_node_coords with super-triangle coordinates
+    # Initialize the node_coords with super-triangle coordinates
     return np.array([super_v0, super_v1, super_v2])
 
 def remove_duplicate_points(
-        points: np.ndarray
+    points: np.ndarray,
+    tol: float = 1e-6
 ) -> np.ndarray:
     """
     This function takes an array of points and removes duplicates while maintaining the original 
@@ -240,18 +248,20 @@ def remove_duplicate_points(
 
     Parameters:
     points : np.ndarray
-        An array of points with shape (n, 2), where each row represents a point (x, y).
+    An array of points with shape (n, 2), where each row represents a point (x, y).
+    tol : float, optional 
+    Tolerance for considering two points equal. Default is 1e-6.
 
     Returns:
     np.ndarray
-        An array of unique points with shape (m, 2), preserving the original order.
+    An array of unique points with shape (m, 2), preserving the original order.
     """
     seen = set()  # Set to track seen points
     unique_points = []  # List to store unique points
 
     for point in points:
-        # Convert the point to a tuple for hashable comparison in the set
-        pt_tuple = tuple(point)
+    # Convert the point to a tuple for hashable comparison in the set
+        pt_tuple = tuple((np.round(point[0] / tol) * tol,np.round(point[1] / tol) * tol))
         if pt_tuple not in seen:
             seen.add(pt_tuple)  # Mark this point as seen
             unique_points.append(point)  # Add the unique point to the list
@@ -352,16 +362,16 @@ def generate_point_around(
     return new_x, new_y
 
 def offset_polygon_shapely(
-    delaunay_node_coords: List[Tuple[float, float]], 
+    node_coords: List[Tuple[float, float]], 
     d: float
 ) -> List[List[Tuple[float, float]]]:
     """
-    This function creates a new polygon by offsetting the given polygon (defined by `delaunay_node_coords`) 
+    This function creates a new polygon by offsetting the given polygon (defined by `node_coords`) 
     inward or outward by a specified distance `d`. A positive `d` value offsets the polygon outward, and a 
     negative `d` value offsets it inward. It uses Shapely's `buffer` method to perform the offset.
 
     Parameters:
-    - delaunay_node_coords (List[Tuple[float, float]]): List of vertex coordinates (x, y) defining the polygon.
+    - node_coords (List[Tuple[float, float]]): List of vertex coordinates (x, y) defining the polygon.
     - d (float): The distance by which to offset the polygon. Positive for outward, negative for inward.
 
     Returns:
@@ -371,138 +381,264 @@ def offset_polygon_shapely(
     - ValueError: If the input polygon is not valid.
     """
     # Create a Shapely Polygon from the provided coordinates
-    poly = Polygon(delaunay_node_coords)
-    
-    # Check if the polygon is valid
-    if not poly.is_valid:
-        raise ValueError("Invalid polygon.")
-    
+    poly = Polygon(node_coords)
+
     # Offset the polygon using the buffer method
     buffered_poly = poly.buffer(d)
 
     return buffered_poly
 
-def poisson_disk_sampling(
-    polygon_outer: List[Tuple[float, float]], 
-    polygons_holes: List[List[Tuple[float, float]]], 
-    radius: float, 
-    k: int = 50, 
-    verbose: int = 1
-) -> List[Tuple[float, float]]:
-    """
-    This function generates points within the provided polygon using Poisson Disk Sampling, ensuring that 
-    each point is at least a specified minimum distance from others. The function handles polygons with 
-    holes and allows adjusting the verbosity level for logging.
+# def poisson_disk_sampling(
+#     polygon_outer: List[Tuple[float, float]], 
+#     polygons_holes: List[List[Tuple[float, float]]], 
+#     radius: float, 
+#     k: int = 50, 
+#     verbose: int = 1
+# ) -> List[Tuple[float, float]]:
+#     """
+#     This function generates points within the provided polygon using Poisson Disk Sampling, ensuring that 
+#     each point is at least a specified minimum distance from others. The function handles polygons with 
+#     holes and allows adjusting the verbosity level for logging.
 
-    Parameters:
-    polygon_outer : List[Tuple[float, float]]
-        Outer boundary of the polygon as a list of (x, y) tuples.
-    polygons_holes : List[List[Tuple[float, float]]]
-        List of hole polygons, each as a list of (x, y) tuples.
-    radius : float
-        Minimum distance between points.
-    k : int, optional
-        Number of attempts before removing a point from the active list. Default is 50.
-    verbose : int, optional
-        Integer indicating the verbosity level (0: silent, 1: basic, 2: detailed, 3: highly detailed).
+#     Parameters:
+#     polygon_outer : List[Tuple[float, float]]
+#         Outer boundary of the polygon as a list of (x, y) tuples.
+#     polygons_holes : List[List[Tuple[float, float]]]
+#         List of hole polygons, each as a list of (x, y) tuples.
+#     radius : float
+#         Minimum distance between points.
+#     k : int, optional
+#         Number of attempts before removing a point from the active list. Default is 50.
+#     verbose : int, optional
+#         Integer indicating the verbosity level (0: silent, 1: basic, 2: detailed, 3: highly detailed).
 
-    Returns:
-    List[Tuple[float, float]]
-        Filtered list of points generated by Poisson Disk Sampling.
-    """
+#     Returns:
+#     List[Tuple[float, float]]
+#         Filtered list of points generated by Poisson Disk Sampling.
+#     """
         
-    # Calculate bounding box
-    min_x = min(p[0] for p in polygon_outer)
-    max_x = max(p[0] for p in polygon_outer)
-    min_y = min(p[1] for p in polygon_outer)
-    max_y = max(p[1] for p in polygon_outer)
+#     # Calculate bounding box
+#     min_x = min(p[0] for p in polygon_outer)
+#     max_x = max(p[0] for p in polygon_outer)
+#     min_y = min(p[1] for p in polygon_outer)
+#     max_y = max(p[1] for p in polygon_outer)
     
-    log(f"Calculated bounding box: x=({min_x}, {max_x}), y=({min_y}, {max_y})", verbose, level=2)
+#     log(f"Calculated bounding box: x=({min_x}, {max_x}), y=({min_y}, {max_y})", verbose, level=2)
     
-    # Initialize the grid for the bounding box
-    cell_size = radius / np.sqrt(2)
-    grid_width = int((max_x - min_x) / cell_size) + 1
-    grid_height = int((max_y - min_y) / cell_size) + 1
-    grid = [[None for _ in range(grid_height)] for _ in range(grid_width)]
+#     # Initialize the grid for the bounding box
+#     cell_size = radius / np.sqrt(2)
+#     grid_width = int((max_x - min_x) / cell_size) + 1
+#     grid_height = int((max_y - min_y) / cell_size) + 1
+#     grid = [[None for _ in range(grid_height)] for _ in range(grid_width)]
     
-    log(f"Initialized grid with cell size {cell_size:.4f}, dimensions {grid_width}x{grid_height}.", verbose, level=2)
+#     log(f"Initialized grid with cell size {cell_size:.4f}, dimensions {grid_width}x{grid_height}.", verbose, level=2)
     
-    start_time = time()
+#     start_time = time()
 
-    # Generate the first point
-    while True:
-        x = np.random.uniform(min_x, max_x)
-        y = np.random.uniform(min_y, max_y)
-        first_point = (x, y)
-        if is_valid(first_point, min_x, min_y, cell_size, grid, grid_width, grid_height, radius):
-            break
-        log(f"First point {first_point} is invalid. Retrying...", verbose, level=3)
+#     # Generate the first point
+#     while True:
+#         x = np.random.uniform(min_x, max_x)
+#         y = np.random.uniform(min_y, max_y)
+#         first_point = (x, y)
+#         if is_valid(first_point, min_x, min_y, cell_size, grid, grid_width, grid_height, radius):
+#             break
+#         log(f"First point {first_point} is invalid. Retrying...", verbose, level=3)
     
-    points = [first_point]
-    active = [first_point]
-    grid_x = int((first_point[0] - min_x) / cell_size)
-    grid_y = int((first_point[1] - min_y) / cell_size)
-    grid[grid_x][grid_y] = first_point
+#     points = [first_point]
+#     active = [first_point]
+#     grid_x = int((first_point[0] - min_x) / cell_size)
+#     grid_y = int((first_point[1] - min_y) / cell_size)
+#     grid[grid_x][grid_y] = first_point
 
-    while active:
-        idx = np.random.randint(0, len(active))
-        point = active[idx]
-        found = False
+#     while active:
+#         idx = np.random.randint(0, len(active))
+#         point = active[idx]
+#         found = False
     
-        log(f"Processing active point {idx + 1}/{len(active)}: {point}", verbose, level=3)
+#         log(f"Processing active point {idx + 1}/{len(active)}: {point}", verbose, level=3)
     
-        for attempt in range(k):
-            new_point = generate_point_around(point, radius)
-            if (min_x <= new_point[0] < max_x) and (min_y <= new_point[1] < max_y):
-                if is_valid(new_point, min_x, min_y, cell_size, grid, grid_width, grid_height, radius):
-                    points.append(new_point)
-                    active.append(new_point)
-                    grid_x = int((new_point[0] - min_x) / cell_size)
-                    grid_y = int((new_point[1] - min_y) / cell_size)
-                    grid[grid_x][grid_y] = new_point
-                    found = True
-                    log(f"Added new point: {new_point}", verbose, level=4)
-                    break
-                else:
-                    log(f"Attempt {attempt + 1}: Point {new_point} is invalid.", verbose, level=4)
+#         for attempt in range(k):
+#             new_point = generate_point_around(point, radius)
+#             if (min_x <= new_point[0] < max_x) and (min_y <= new_point[1] < max_y):
+#                 if is_valid(new_point, min_x, min_y, cell_size, grid, grid_width, grid_height, radius):
+#                     points.append(new_point)
+#                     active.append(new_point)
+#                     grid_x = int((new_point[0] - min_x) / cell_size)
+#                     grid_y = int((new_point[1] - min_y) / cell_size)
+#                     grid[grid_x][grid_y] = new_point
+#                     found = True
+#                     log(f"Added new point: {new_point}", verbose, level=4)
+#                     break
+#                 else:
+#                     log(f"Attempt {attempt + 1}: Point {new_point} is invalid.", verbose, level=4)
+#             else:
+#                 log(f"Attempt {attempt + 1}: Point {new_point} is out of bounds.", verbose, level=3)
+    
+#         if not found:
+#             active.pop(idx)
+#             log(f"No valid point found after {k} attempts. Removing point {point} from active list.", verbose, level=3)
+    
+#     generated_time = time()
+#     log(f"Time taken to generate the points: {generated_time - start_time:.4f} seconds.", verbose, level=1)
+    
+#     # Offset polygons for filtering
+#     log("Offsetting polygons for filtering.", verbose, level=2)
+#     polygon_outer_shapely = offset_polygon_shapely(polygon_outer, -radius / 2)
+#     polygons_holes_shapely = [offset_polygon_shapely(polygon_hole, +radius / 2) for polygon_hole in polygons_holes]
+    
+#     # Filter points to keep only those inside the polygon and not in holes
+#     log("Filtering points inside the polygon and outside the holes.", verbose, level=2)
+#     filtered_points = []
+#     for idx, p in enumerate(points):
+#         point_shapely = Point(p)
+#         if polygon_outer_shapely.contains(point_shapely) and all(not hole.contains(point_shapely) for hole in polygons_holes_shapely):
+#             filtered_points.append(p)
+#             log(f"Point {idx + 1} ({p}) is inside the polygon and kept.", verbose, level=3)
+#         else:
+#             log(f"Point {idx + 1} ({p}) is outside the polygon or inside a hole and discarded.", verbose, level=3)
+    
+#     filter_time = time()
+#     log(f"Time taken to filter the points: {filter_time - generated_time:.4f} seconds.", verbose, level=1)
+    
+#     log(f"Generated {len(filtered_points)} points after filtering.", verbose, level=1)
+    
+#     return filtered_points
+
+def insert_point(grid_values, min_x, min_y, cell_size, point):
+    grid_x = int((point[0] - min_x) / cell_size)
+    grid_y = int((point[1] - min_y) / cell_size)
+    grid_values[grid_x, grid_y] = point
+
+def distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
+    return np.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+
+def is_valid(
+        grid_values,
+        grid_width,
+        grid_height,
+        min_x,
+        min_y,
+        cell_size,
+        radius,
+        new_sample
+):
+    grid_x = int((new_sample[0] - min_x) / cell_size)
+    grid_y = int((new_sample[1] - min_y) / cell_size)
+    if not (0 <= grid_x < grid_width and 0 <= grid_y < grid_height):
+        return False
+        
+    if grid_values[grid_x, grid_y] != 0:
+        return False
+    
+    # Check neighboring cells for minimum distance
+    for dx in [-2, -1, 0, 1, 2]:
+        for dy in [-2, -1, 0, 1, 2]:
+            nx, ny = grid_x + dx, grid_y + dy
+            if 0 <= nx < grid_width and 0 <= ny < grid_height:
+                if isinstance(grid_values[nx, ny], tuple):
+                    if distance(grid_values[nx, ny], new_sample) < radius:
+                        return False
+    return True
+
+def visualize_grid_and_polygon(
+    shell_coords: List[Tuple[float, float]],
+    holes_coords: List[List[Tuple[float, float]]],
+    grid_values: np.ndarray,
+    min_x: float,
+    min_y: float,
+    cell_size: float,
+    samples: Optional[List[Tuple[float, float]]] = None
+) -> None:
+    """
+    Visualize the grid cells, polygon, and sample points.
+    
+    Args:
+        shell_coords: Coordinates of the polygon's outer shell
+        holes_coords: List of coordinates for holes in the polygon
+        grid_values: The grid array containing None, 0, or point coordinates
+        min_x: Minimum x coordinate of the grid
+        min_y: Minimum y coordinate of the grid
+        cell_size: Size of each grid cell
+        samples: Optional list of generated sample points
+    """
+    import matplotlib.pyplot as plt
+    from shapely.geometry import Polygon
+    import numpy as np
+    from typing import List, Tuple, Optional, Union
+    from matplotlib.patches import Rectangle
+
+
+    fig, ax = plt.subplots(figsize=(12, 12))
+    
+    # Plot the polygon
+    polygon = Polygon(shell=shell_coords, holes=holes_coords)
+    x, y = polygon.exterior.xy
+    ax.plot(x, y, 'k-', linewidth=2, label='Polygon Boundary')
+    
+    # Plot holes if any
+    for hole in holes_coords:
+        hole_x = [p[0] for p in hole + [hole[0]]]
+        hole_y = [p[1] for p in hole + [hole[0]]]
+        ax.plot(hole_x, hole_y, 'k-', linewidth=2)
+    
+    # Plot grid cells with different colors based on their values
+    grid_width, grid_height = grid_values.shape
+
+    for i in range(grid_width):
+        for j in range(grid_height):
+            cell_x = min_x + i * cell_size
+            cell_y = min_y + j * cell_size
+
+            if grid_values[i, j] is None:
+                color = 'lightgray'
+                alpha = 0.3
+            elif grid_values[i, j] == 0:
+                color = 'lightblue'
+                alpha = 0.5
             else:
-                log(f"Attempt {attempt + 1}: Point {new_point} is out of bounds.", verbose, level=3)
+                color = 'green'
+                alpha = 0.3
+                
+            rect = Rectangle(
+                (cell_x, cell_y),
+                cell_size,
+                cell_size,
+                facecolor=color,
+                alpha=alpha,
+                edgecolor='gray',
+                linewidth=0.5
+            )
+            ax.add_patch(rect)
     
-        if not found:
-            active.pop(idx)
-            log(f"No valid point found after {k} attempts. Removing point {point} from active list.", verbose, level=3)
+    # Plot sample points if provided
+    if samples:
+        sample_x = [p[0] for p in samples]
+        sample_y = [p[1] for p in samples]
+        ax.scatter(sample_x, sample_y, c='red', s=20, label='Sample Points')
     
-    generated_time = time()
-    log(f"Time taken to generate the points: {generated_time - start_time:.4f} seconds.", verbose, level=1)
+    # Add legend
+    custom_lines = [
+        Rectangle((0, 0), 1, 1, facecolor='lightgray', alpha=0.3),
+        Rectangle((0, 0), 1, 1, facecolor='lightblue', alpha=0.5),
+        Rectangle((0, 0), 1, 1, facecolor='green', alpha=0.3)
+    ]
+    ax.legend(custom_lines + ([plt.Line2D([0], [0], marker='o', color='red', linestyle='None')] if samples else []),
+             ['Outside Grid Cells', 'Valid Grid Cells', 'Occupied Cells'] + (['Sample Points'] if samples else []))
     
-    # Offset polygons for filtering
-    log("Offsetting polygons for filtering.", verbose, level=2)
-    polygon_outer_shapely = offset_polygon_shapely(polygon_outer, -radius / 2)
-    polygons_holes_shapely = [offset_polygon_shapely(polygon_hole, +radius / 2) for polygon_hole in polygons_holes]
-    
-    # Filter points to keep only those inside the polygon and not in holes
-    log("Filtering points inside the polygon and outside the holes.", verbose, level=2)
-    filtered_points = []
-    for idx, p in enumerate(points):
-        point_shapely = Point(p)
-        if polygon_outer_shapely.contains(point_shapely) and all(not hole.contains(point_shapely) for hole in polygons_holes_shapely):
-            filtered_points.append(p)
-            log(f"Point {idx + 1} ({p}) is inside the polygon and kept.", verbose, level=3)
-        else:
-            log(f"Point {idx + 1} ({p}) is outside the polygon or inside a hole and discarded.", verbose, level=3)
-    
-    filter_time = time()
-    log(f"Time taken to filter the points: {filter_time - generated_time:.4f} seconds.", verbose, level=1)
-    
-    log(f"Generated {len(filtered_points)} points after filtering.", verbose, level=1)
-    
-    return filtered_points
+    # Set equal aspect ratio and display
+    ax.set_aspect('equal')
+    ax.grid(True, linestyle='--', alpha=0.3)
+    plt.title('Polygon Grid Visualization')
+    plt.show()
 
-def exp_poisson_disk_sampling(
+    
+
+
+def poisson_disk_sampling_complex_geometry(
     polygon_outer: List[Tuple[float, float]], 
     polygons_holes: List[List[Tuple[float, float]]], 
     radius: float, 
-    k: int = 50, 
+    k: int = 100, 
     verbose: int = 1
 ) -> List[Tuple[float, float]]:
     """
@@ -527,157 +663,178 @@ def exp_poisson_disk_sampling(
         Filtered list of points generated by Poisson Disk Sampling.
     """
     # Create the Shapely polygon from the outer boundary and holes
-    polygon_outer_shapely = offset_polygon_shapely(polygon_outer, -radius / 2.5)
-    shell_coords = list(polygon_outer_shapely.exterior.coords)
 
-    polygons_holes_shapely = [offset_polygon_shapely(polygon_hole, +radius / 2.5) 
-                             for polygon_hole in polygons_holes]
-    holes_coords = [list(hole.exterior.coords) for hole in polygons_holes_shapely]
+    # Offset the outer polygon by the negative radius
+    polygon_outer_shapely = offset_polygon_shapely(polygon_outer, -radius)
 
-    polygon = Polygon(shell=shell_coords, holes=holes_coords)
+    # Initialize lists to hold the final polygons and their holes
+    polygons_with_holes = []
+
+    # Check if the outer polygon is a MultiPolygon or a simple Polygon
+    if isinstance(polygon_outer_shapely, MultiPolygon):
+        # Process each individual polygon in the MultiPolygon
+        for individual_polygon in polygon_outer_shapely.geoms:
+            shell_coords = list(individual_polygon.exterior.coords)
+
+            # Find the holes that are contained within this individual polygon
+            individual_holes_coords = []
+            if polygons_holes:
+                for polygon_hole in polygons_holes:
+                    # Offset the hole by a positive radius
+                    offset_hole = offset_polygon_shapely(polygon_hole, +radius)
+
+                    # Check if the hole is within the individual polygon
+                    if offset_hole.within(individual_polygon):
+                        individual_holes_coords.append(list(offset_hole.exterior.coords))
+
+            # Add the polygon and its associated holes
+            polygons_with_holes.append(Polygon(shell=shell_coords, holes=individual_holes_coords))
+
+    else:
+        # If it's a simple Polygon, process it directly
+        shell_coords = list(polygon_outer_shapely.exterior.coords)
+
+        # Offset and assign holes
+        if polygons_holes:
+            polygons_holes_shapely = [
+                offset_polygon_shapely(polygon_hole, +radius) for polygon_hole in polygons_holes
+            ]
+            holes_coords = [list(hole.exterior.coords) for hole in polygons_holes_shapely if hole.within(polygon_outer_shapely)]
+        else:
+            holes_coords = []
+
+        polygons_with_holes.append(Polygon(shell=shell_coords, holes=holes_coords))
+
+    global_samples = []
+
+    for polygon in polygons_with_holes:
+        samples = poisson_disk_sampling(polygon, radius, k, verbose)
+        global_samples.extend(samples)
+
+    return global_samples
+
+def poisson_disk_sampling(
+        polygon: Polygon,
+        radius: float, 
+        k: int = 50, 
+        verbose: int = 1
+) -> List[Tuple[float, float]]:
+
+    # plot the shapely polygon
+    import matplotlib.pyplot as plt
+    from shapely.geometry import MultiPolygon
+
+    # def plot_polygon(polygon):
+    #     """
+    #     Plots a Shapely Polygon or MultiPolygon using Matplotlib.
+
+    #     Parameters:
+    #     polygon : Polygon or MultiPolygon
+    #         The Shapely Polygon or MultiPolygon to plot.
+    #     """
+    #     fig, ax = plt.subplots()
+        
+    #     if isinstance(polygon, MultiPolygon):
+    #         for poly in polygon.geoms:
+    #             x, y = poly.exterior.xy
+    #             ax.plot(x, y, 'b')
+    #             for interior in poly.interiors:
+    #                 x, y = interior.xy
+    #                 ax.plot(x, y, 'r')
+    #     else:
+    #         x, y = polygon.exterior.xy
+    #         ax.plot(x, y, 'b')
+    #         for interior in polygon.interiors:
+    #             x, y = interior.xy
+    #             ax.plot(x, y, 'r')
+        
+    #     ax.set_aspect('equal')
+    #     plt.show()
+
+    # plot_polygon(polygon)
+
     prepared_polygon = prep(polygon)
 
     # Calculate bounding box and create grid
     min_x, min_y, max_x, max_y = polygon.bounds
+
+    log(f"Calculated bounding box: x=({min_x}, {max_x}), y=({min_y}, {max_y})", verbose, level=2)
+
     cell_size = radius / np.sqrt(2)
-    grid_width = int((max_x - min_x) / cell_size)
-    grid_height = int((max_y - min_y) / cell_size)
+    grid_width = int(np.ceil((max_x - min_x) / cell_size) + 1)
+    grid_height = int(np.ceil((max_y - min_y) / cell_size) + 1)
 
-    # Create grid cells
-    g_x, g_y = np.linspace(min_x, max_x, grid_width), np.linspace(min_y, max_y, grid_height)
-    grid_bounds = []
-    for i in range(len(g_x) - 1):
-        for j in range(len(g_y) - 1):
-            poly_ij = Polygon([
-                [g_x[i], g_y[j]], 
-                [g_x[i], g_y[j+1]], 
-                [g_x[i+1], g_y[j+1]], 
-                [g_x[i+1], g_y[j]]
+    # Initialize grid values to None
+    grid_values = np.full((grid_width, grid_height), None)
+
+    start_time = time()
+    nb_grid_polygon_values = 0
+
+    # Iterate through each cell and assign values
+    for i in range(grid_width):
+        for j in range(grid_height):
+            # Define the cell as a polygon
+            cell = Polygon([
+                (min_x + i * cell_size, min_y + j * cell_size),
+                (min_x + i * cell_size, min_y + (j + 1) * cell_size),
+                (min_x + (i + 1) * cell_size, min_y + (j + 1) * cell_size),
+                (min_x + (i + 1) * cell_size, min_y + j * cell_size)
             ])
-            grid_bounds.append(poly_ij)
+            # Check if the cell intersects with the polygon
+            if prepared_polygon.intersects(cell):
+                grid_values[i, j] = 0
+                nb_grid_polygon_values += 1
 
-    grid_polygon = list(filter(prepared_polygon.intersects, grid_bounds))
-    # Initialize background grid with -1
-    grid = -1 * np.ones((grid_width, grid_height), dtype=int)
-
+    grid_generated_time = time()
+    log(f"Initialized in {grid_generated_time - start_time:.4f} seconds grid with cell size {cell_size:.4f}, dimensions {grid_width}x{grid_height}. with {nb_grid_polygon_values} cells intersecting the polygon", verbose, level=1)
+    
     # List of samples (points)
     samples: List[Tuple[float, float]] = []
 
-    # Active list of sample indices
-    active_list: List[int] = []
+    # Active list of points
+    active_list: List[Tuple[float, float]] = []
 
-    # Helper function to generate a random point within the polygon
-    def generate_random_point():
-        while True:
-            x = random.uniform(min_x, max_x)
-            y = random.uniform(min_y, max_y)
-            point = Point(x, y)
-            if prepared_polygon.contains(point):
-                return (x, y)
+    start_time = time()
 
-    # Helper function to generate a random point in the annulus [r, 2r]
-    def generate_random_annulus_point(x, y):
-        r1 = radius
-        r2 = 2 * radius
-        theta = random.uniform(0, 2 * np.pi)
-        r = np.sqrt(random.uniform(r1**2, r2**2))
-        new_x = x + r * np.cos(theta)
-        new_y = y + r * np.sin(theta)
-        return (new_x, new_y)
-
-    # Helper function to get grid cell indices
-    def get_grid_indices(x, y):
-        return int((x - min_x) / cell_size), int((y - min_y) / cell_size)
-
-    # Step 1: Select the initial sample
-    initial_point = generate_random_point()
-    samples.append(initial_point)
-    if verbose >= 2:
-        print(f"Initial sample: {initial_point}")
-
-    i, j = get_grid_indices(*initial_point)
-    grid[i][j] = 0
-    active_list.append(0)
-
-    if verbose >= 1:
-        print("Starting Poisson Disk Sampling...")
-
-    # Step 2: Main loop
-    while active_list:
-        if verbose >= 3:
-            print(f"Active list size: {len(active_list)}")
-        # Choose a random index from active list
-        current_index = random.choice(active_list)
-        current_point = samples[current_index]
-        if verbose >= 3:
-            print(f"Processing sample index {current_index}: {current_point}")
-
-        found = False
-        for attempt in range(k):
-            new_point = generate_random_annulus_point(*current_point)
-            if verbose >= 3:
-                print(f"Attempt {attempt+1}: Generated point {new_point}")
-
-            # Check if the point is within the polygon
-            new_point_shapely = Point(new_point)
-            if not prepared_polygon.contains(new_point_shapely):
-                if verbose >= 4:
-                    print(f"Point {new_point} is outside the polygon.")
-                continue
-
-            # Get grid cell of the new point
-            ni, nj = get_grid_indices(*new_point)
-
-            # Check if the point is within grid bounds
-            if ni < 0 or ni >= grid_width or nj < 0 or nj >= grid_height:
-                if verbose >= 4:
-                    print(f"Point {new_point} is out of grid bounds.")
-                continue
-
-            # Check neighboring cells for points too close
-            too_close = False
-            i_min = max(ni - 1, 0)
-            i_max = min(ni + 1, grid_width - 1)
-            j_min = max(nj - 1, 0)
-            j_max = min(nj + 1, grid_height - 1)
-
-            for ii in range(i_min, i_max + 1):
-                for jj in range(j_min, j_max + 1):
-                    neighbor_index = grid[ii][jj]
-                    if neighbor_index != -1:
-                        neighbor_point = samples[neighbor_index]
-                        dx = neighbor_point[0] - new_point[0]
-                        dy = neighbor_point[1] - new_point[1]
-                        distance_sq = dx * dx + dy * dy
-                        if distance_sq < radius * radius:
-                            too_close = True
-                            if verbose >= 4:
-                                print(f"Point {new_point} is too close to {neighbor_point}")
-                            break
-                if too_close:
-                    break
-
-            if not too_close:
-                # Valid point found
-                samples.append(new_point)
-                new_index = len(samples) - 1
-                grid[ni][nj] = new_index
-                active_list.append(new_index)
-                found = True
-                if verbose >= 3:
-                    print(f"Accepted point {new_point} as sample index {new_index}")
-                if verbose >= 2:
-                    print(f"Total samples: {len(samples)}")
+    # Generate the first sample to be inside the polygon ie the cell it belongs to is not None
+    # We take n attemps such that given the number of filled cells in the grid, we have 99.9% chance of finding a valid point
+    n = 0.999 / np.ln( 1 - nb_grid_polygon_values / (grid_width * grid_height) )
+    for _ in range(n):
+        x = np.random.uniform(min_x, max_x)
+        y = np.random.uniform(min_y, max_y)
+        point = (x, y)
+        grid_x = int(np.ceil((point[0] - min_x) / cell_size))
+        grid_y = int(np.ceil((point[1] - min_y) / cell_size))
+        if grid_values[grid_x, grid_y] is not None:
+            insert_point(grid_values, min_x, min_y, cell_size, point)
+            samples.append(point)
+            active_list.append(point)
+            break
         
+        
+
+
+    # Generate the rest of the samples
+    while active_list:
+        random_idx = random.randint(0, len(active_list)-1)
+        sample = active_list[random_idx]
+        found = False
+
+        for _ in range(k):
+            new_sample = generate_point_around(sample, radius)
+            if is_valid(grid_values, grid_width, grid_height, min_x, min_y, cell_size, radius, new_sample):
+                insert_point(grid_values, min_x, min_y, cell_size, new_sample)
+                samples.append(new_sample)
+                active_list.append(new_sample)
+                found = True
+                break
+
         if not found:
-            # No valid point found after k attempts, remove from active list
-            active_list.remove(current_index)
-            if verbose >= 3:
-                print(f"Removed sample index {current_index} from active list")
+            active_list.pop(random_idx)
 
-    if verbose >= 1:
-        print(f"Poisson Disk Sampling completed with {len(samples)} samples.")
-
+    generated_time = time()
+    log(f"Time taken to generate {len(samples)} points: {generated_time - start_time:.4f} seconds.", verbose, level=1)
+    
     return samples
 
 def heterogen_disk_sampling():
@@ -716,7 +873,7 @@ def generate_cloud(
     log("Starting point cloud generation.", verbose, level=1)
     
     # Step 1: Remove duplicate points from the polygon
-    polygon_outer = remove_duplicate_points(polygon_outer)
+    polygon_outer = remove_duplicate_points(polygon_outer, tol=min_distance*1e-2)
     log(f"Removed duplicate points. Number of polygon vertices: {len(polygon_outer)}", verbose, level=2)
     
     # Step 2: Calculate the minimum distance between adjacent points along the polygon edges
@@ -724,6 +881,7 @@ def generate_cloud(
         np.linalg.norm(np.array(polygon_outer[i]) - np.array(polygon_outer[(i + 1) % len(polygon_outer)]))
         for i in range(len(polygon_outer))
     )
+
     
     if polygons_holes:  # Check if there are holes to avoid errors
         min_distance_polygon_holes = min(
@@ -751,11 +909,12 @@ def generate_cloud(
     log(f"Generated {len(outer_boundary_node_coords)} outer boundary points.", verbose, level=1)
 
     hole_boundaries_node_coords = []
-    for polygon_hole in polygons_holes:
-        hole_boundary_node_coords = generate_boundary_node_coords(polygon_hole, effective_min_distance, verbose)
-        hole_boundary_node_coords = remove_duplicate_points(hole_boundary_node_coords)
-        hole_boundary_node_coords = np.array(hole_boundary_node_coords)
-        hole_boundaries_node_coords.append(hole_boundary_node_coords)
+    if polygons_holes:
+        for polygon_hole in polygons_holes:
+            hole_boundary_node_coords = generate_boundary_node_coords(polygon_hole, effective_min_distance, verbose)
+            hole_boundary_node_coords = remove_duplicate_points(hole_boundary_node_coords)
+            hole_boundary_node_coords = np.array(hole_boundary_node_coords)
+            hole_boundaries_node_coords.append(hole_boundary_node_coords)
 
     # Flatten hole boundaries into a single array
     if hole_boundaries_node_coords:
@@ -769,7 +928,7 @@ def generate_cloud(
     
     # Step 5: Generate interior points using Poisson Disk Sampling
     log("Generating interior points using Poisson Disk Sampling.", verbose, level=1)
-    interior_node_coords = poisson_disk_sampling(
+    interior_node_coords = poisson_disk_sampling_complex_geometry(
         polygon_outer=polygon_outer,
         polygons_holes=polygons_holes,
         radius=effective_min_distance,
@@ -781,7 +940,10 @@ def generate_cloud(
     log(f"Generated {len(interior_node_coords)} interior points.", verbose, level=1)
     
     # Step 6: Combine boundary and interior points into a single array
-    boundary_node_coords = np.concatenate([outer_boundary_node_coords, hole_boundaries_node_coords_flattened])
+    if hole_boundaries_node_coords_flattened.size == 0:
+        boundary_node_coords = outer_boundary_node_coords
+    else:
+        boundary_node_coords = np.concatenate([outer_boundary_node_coords, hole_boundaries_node_coords_flattened])
 
     combined_points = np.concatenate([boundary_node_coords, interior_node_coords])
     log(f"Total points in cloud: {combined_points.shape[0]}", verbose, level=1)

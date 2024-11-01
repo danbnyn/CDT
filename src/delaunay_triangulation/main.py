@@ -43,5 +43,5 @@ def generate_mesh(polygon_outer, polygons_holes, min_distance, verbose=1):
     # Step 5 : Apply RCM
     node_coords, elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes = apply_rcm(node_coords, elem2nodes, p_elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes)
 
-    return node_coords, elem2nodes, node2elems, node2nodes, p_node2nodes
+    return node_coords, elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes
 

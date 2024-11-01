@@ -537,7 +537,8 @@ def constrained_delaunay_triangulation(
             log(f"Inserted edge ({u}, {v}) in {time() - step_start:.4f} seconds. "
                 f"elem_nodes increased by {elem_nodes_inserted}. Total elem_nodes: {elem_nodes_after}", verbose, level=4)
         except Exception as e:
-            log(f"Error inserting edge ({u}, {v}): {e}", verbose, level=2)
+            raise ValueError(f"Error inserting edge ({u}, {v}): {e}")
+            # log(f"Error inserting edge ({u}, {v}): {e}", verbose, level=2)
     
     total_time = time() - start_time
     log(f"\nConstrained Delaunay Triangulation completed in {total_time:.4f} seconds.", verbose, level=1)
