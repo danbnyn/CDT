@@ -5,7 +5,7 @@ src/delaunay_triangulation/cdt.py
 src/delaunay_triangulation/cdt_utils.py
 src/delaunay_triangulation/dt.py
 src/delaunay_triangulation/dt_utils.py
-src/delaunay_triangulation/homothety.py
+src/delaunay_triangulation/main.py
 src/delaunay_triangulation/operations.py
 src/delaunay_triangulation/post_process.py
 src/delaunay_triangulation/pre_process.py

@@ -1,3 +1,5 @@
+import numpy as np
+
 from .pre_process import generate_cloud
 from .dt import delaunay_triangulation
 from .utils import generate_edges_from_points, convert_edges_to_ids
@@ -34,14 +36,14 @@ def generate_mesh(polygon_outer, polygons_holes, min_distance, verbose=1):
     super_delaunay_node_coords = [0, 1, 2]
     delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes = clean_mesh(delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes, super_delaunay_node_coords, outer_boundary_constrained_edges, hole_boundaries_constrained_edges, verbose = verbose)
 
-    plot_triangulation(delaunay_node_coords, delaunay_elem_nodes, title="Constrained Delaunay Triangulation based on Boundary Points")
+    if verbose >= 1:
+        plot_triangulation(delaunay_node_coords, delaunay_elem_nodes, title="Constrained Delaunay Triangulation based on Boundary Points")
 
     # # Step 4 : Convert mesh to data structure
     node_coords, numb_elems, elem2nodes, p_elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes = convert_to_mesh_format(delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes)
 
-
     # Step 5 : Apply RCM
     node_coords, elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes = apply_rcm(node_coords, elem2nodes, p_elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes)
 
-    return node_coords, elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes
+    return  np.array(node_coords), np.array(elem2nodes), np.array(p_elem2nodes), np.array(node2elems), np.array(p_node2elems), np.array(node2nodes), np.array(p_node2nodes)
 

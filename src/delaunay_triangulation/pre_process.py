@@ -798,7 +798,7 @@ def poisson_disk_sampling(
 
     # Generate the first sample to be inside the polygon ie the cell it belongs to is not None
     # We take n attemps such that given the number of filled cells in the grid, we have 99.9% chance of finding a valid point
-    n = 0.999 / np.ln( 1 - nb_grid_polygon_values / (grid_width * grid_height) )
+    n = int(np.ceil(np.log(0.999) / np.log( nb_grid_polygon_values / (grid_width * grid_height) ))) + 10
     for _ in range(n):
         x = np.random.uniform(min_x, max_x)
         y = np.random.uniform(min_y, max_y)
@@ -876,34 +876,8 @@ def generate_cloud(
     polygon_outer = remove_duplicate_points(polygon_outer, tol=min_distance*1e-2)
     log(f"Removed duplicate points. Number of polygon vertices: {len(polygon_outer)}", verbose, level=2)
     
-    # Step 2: Calculate the minimum distance between adjacent points along the polygon edges
-    min_distance_polygon_outer = min(
-        np.linalg.norm(np.array(polygon_outer[i]) - np.array(polygon_outer[(i + 1) % len(polygon_outer)]))
-        for i in range(len(polygon_outer))
-    )
-
-    
-    if polygons_holes:  # Check if there are holes to avoid errors
-        min_distance_polygon_holes = min(
-            min(
-                np.linalg.norm(np.array(polygon_hole[i]) - np.array(polygon_hole[(i + 1) % len(polygon_hole)]))
-                for i in range(len(polygon_hole))
-            )
-            for polygon_hole in polygons_holes
-        )
-    else:
-        min_distance_polygon_holes = float('inf')  # No holes, set to a large value
-
-    min_distance_polygon = min(min_distance_polygon_outer, min_distance_polygon_holes)
-
-    log(f"Minimum edge length in polygon: {min_distance_polygon:.4f}", verbose, level=2)
-    
-    # Step 3: Determine the effective minimum distance for both boundary and interior points
-    effective_min_distance = min(min_distance, min_distance_polygon)
-    log(f"Effective minimum distance between points: {effective_min_distance:.4f}", verbose, level=2)
-    
     # Step 4: Generate boundary points along the polygon edges
-    outer_boundary_node_coords = generate_boundary_node_coords(polygon_outer, effective_min_distance, verbose)
+    outer_boundary_node_coords = generate_boundary_node_coords(polygon_outer, min_distance, verbose)
     outer_boundary_node_coords = remove_duplicate_points(outer_boundary_node_coords)
     outer_boundary_node_coords = np.array(outer_boundary_node_coords)
     log(f"Generated {len(outer_boundary_node_coords)} outer boundary points.", verbose, level=1)
@@ -911,7 +885,7 @@ def generate_cloud(
     hole_boundaries_node_coords = []
     if polygons_holes:
         for polygon_hole in polygons_holes:
-            hole_boundary_node_coords = generate_boundary_node_coords(polygon_hole, effective_min_distance, verbose)
+            hole_boundary_node_coords = generate_boundary_node_coords(polygon_hole, min_distance, verbose)
             hole_boundary_node_coords = remove_duplicate_points(hole_boundary_node_coords)
             hole_boundary_node_coords = np.array(hole_boundary_node_coords)
             hole_boundaries_node_coords.append(hole_boundary_node_coords)
@@ -931,7 +905,7 @@ def generate_cloud(
     interior_node_coords = poisson_disk_sampling_complex_geometry(
         polygon_outer=polygon_outer,
         polygons_holes=polygons_holes,
-        radius=effective_min_distance,
+        radius=min_distance,
         k=50,
         verbose=verbose
     )
