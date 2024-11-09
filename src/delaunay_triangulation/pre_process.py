@@ -650,7 +650,7 @@ def poisson_disk_sampling(
 
     # Generate the first sample to be inside the polygon ie the cell it belongs to is not None
     # We take n attemps such that given the number of filled cells in the grid, we have 99.9% chance of finding a valid point
-    n = int(np.ceil(np.log(0.999) / np.log( nb_grid_polygon_values / (grid_width * grid_height) ))) + 10
+    n = 0.999 / np.ln( 1 - nb_grid_polygon_values / (grid_width * grid_height) )
     for _ in range(n):
         x = np.random.uniform(min_x, max_x)
         y = np.random.uniform(min_y, max_y)

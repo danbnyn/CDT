@@ -7,10 +7,10 @@ from .cdt import constrained_delaunay_triangulation
 from .post_process import clean_mesh, convert_to_mesh_format, apply_rcm
 from .visualize import plot_triangulation
 
-def generate_mesh(polygon_outer, polygons_holes, min_distance_outer, verbose=1):
+def generate_mesh(polygon_outer, polygons_holes, min_distance, verbose=1):
 
     # Generate points on boundary for refinement and interior points
-    cloud_node_coords, outer_boundary_node_coords, hole_boundaries_node_coords, interior_node_coords = generate_cloud(polygon_outer, polygons_holes, min_distance_outer, verbose = verbose)
+    cloud_node_coords, outer_boundary_node_coords, hole_boundaries_node_coords, interior_node_coords = generate_cloud(polygon_outer, polygons_holes, min_distance, verbose = verbose)
 
     # #reverse the order of the boundary points to be ccw
     outer_boundary_node_coords = outer_boundary_node_coords[::-1]
@@ -36,7 +36,8 @@ def generate_mesh(polygon_outer, polygons_holes, min_distance_outer, verbose=1):
     super_delaunay_node_coords = [0, 1, 2]
     delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes = clean_mesh(delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes, super_delaunay_node_coords, outer_boundary_constrained_edges, hole_boundaries_constrained_edges, verbose = verbose)
 
-    plot_triangulation(delaunay_node_coords, delaunay_elem_nodes, title="Constrained Delaunay Triangulation based on Boundary Points")
+    if verbose >= 1:
+        plot_triangulation(delaunay_node_coords, delaunay_elem_nodes, title="Constrained Delaunay Triangulation based on Boundary Points")
 
     # # Step 4 : Convert mesh to data structure
     node_coords, numb_elems, elem2nodes, p_elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes = convert_to_mesh_format(delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes)
