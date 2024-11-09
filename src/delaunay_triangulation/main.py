@@ -1,3 +1,5 @@
+import numpy as np
+
 from .pre_process import generate_cloud
 from .dt import delaunay_triangulation
 from .utils import generate_edges_from_points, convert_edges_to_ids
@@ -5,10 +7,10 @@ from .cdt import constrained_delaunay_triangulation
 from .post_process import clean_mesh, convert_to_mesh_format, apply_rcm
 from .visualize import plot_triangulation
 
-def generate_mesh(polygon_outer, polygons_holes, min_distance, verbose=1):
+def generate_mesh(polygon_outer, polygons_holes, min_distance_outer, verbose=1):
 
     # Generate points on boundary for refinement and interior points
-    cloud_node_coords, outer_boundary_node_coords, hole_boundaries_node_coords, interior_node_coords = generate_cloud(polygon_outer, polygons_holes, min_distance, verbose = verbose)
+    cloud_node_coords, outer_boundary_node_coords, hole_boundaries_node_coords, interior_node_coords = generate_cloud(polygon_outer, polygons_holes, min_distance_outer, verbose = verbose)
 
     # #reverse the order of the boundary points to be ccw
     outer_boundary_node_coords = outer_boundary_node_coords[::-1]
@@ -39,9 +41,8 @@ def generate_mesh(polygon_outer, polygons_holes, min_distance, verbose=1):
     # # Step 4 : Convert mesh to data structure
     node_coords, numb_elems, elem2nodes, p_elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes = convert_to_mesh_format(delaunay_node_coords, delaunay_elem_nodes, delaunay_node_elems, delaunay_node_nodes)
 
-
     # Step 5 : Apply RCM
     node_coords, elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes = apply_rcm(node_coords, elem2nodes, p_elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes)
 
-    return node_coords, elem2nodes, node2elems, p_node2elems, node2nodes, p_node2nodes
+    return  np.array(node_coords), np.array(elem2nodes), np.array(p_elem2nodes), np.array(node2elems), np.array(p_node2elems), np.array(node2nodes), np.array(p_node2nodes)
 
